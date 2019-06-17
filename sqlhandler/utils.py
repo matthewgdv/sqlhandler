@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import re as witchcraft
-from typing import Any, List, Set, Callable, TYPE_CHECKING
+from typing import Any, List, Set, Callable, TypeVar, TYPE_CHECKING
 
 import sqlalchemy as alch
 import sqlalchemy.sql.sqltypes
 import sqlparse
 from sqlalchemy.dialects import mssql
 from sqlalchemy.orm import Query
+from pyodbc import ProgrammingError
 
 from maybe import Maybe
 from subtypes import Frame, DateTime
@@ -16,12 +17,15 @@ if TYPE_CHECKING:
     from .alchemy import Alchemy
 
 
+SelfType = TypeVar("SelfType")
+
+
 class AlchemyBound:
     def __init__(self, *args: Any, alchemy: Alchemy = None, **kwargs: Any) -> None:
         self.alchemy = alchemy
 
     @classmethod
-    def from_alchemy(cls, alchemy: Alchemy) -> Callable:
+    def from_alchemy(cls: SelfType, alchemy: Alchemy) -> Callable[[Any], SelfType]:
         def wrapper(*args: Any, **kwargs: Any) -> AlchemyBound:
             return cls(*args, alchemy=alchemy, **kwargs)
         return wrapper
@@ -30,23 +34,43 @@ class AlchemyBound:
 class StoredProcedure(AlchemyBound):
     def __init__(self, name: str, schema: str = "dbo", alchemy: Alchemy = None) -> None:
         self.alchemy, self.name, self.schema = alchemy, name, schema
+        self.cursor = self.alchemy.engine.raw_connection().cursor()
         self.frames: List[Frame] = None
         self.results: List[List[Frame]] = []
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self.execute(*args, **kwargs)
 
+    def __enter__(self) -> StoredProcedure:
+        return self
+
+    def __exit__(self, ex_type: Any, ex_value: Any, ex_traceback: Any) -> None:
+        if ex_type is None:
+            self.cursor.commit()
+        else:
+            self.cursor.rollback()
+
     def execute(self, *args: Any, **kwargs: Any) -> Frame:
-        cursor = self.alchemy.engine.raw_connection().cursor()
-        result = cursor.execute(f"EXEC {self.schema}.{self.name} {', '.join(list('?'*len(args)) + [f'@{arg}=?' for arg in kwargs.keys()])};", *[*args, *list(kwargs.values())])
+        result = self.cursor.execute(f"EXEC {self.schema}.{self.name} {', '.join(list('?'*len(args)) + [f'@{arg}=?' for arg in kwargs.keys()])};", *[*args, *list(kwargs.values())])
+
         self.frames = self._get_frames_from_result(result)
         self.results.append(self.frames)
+
         return self.frames
+
+    def commit(self) -> None:
+        self.cursor.commit()
+
+    def rollback(self) -> None:
+        self.cursor.rollback()
 
     @staticmethod
     def _get_frames_from_result(result: Any) -> List[Frame]:
         def get_frame_from_result(result: Any) -> Frame:
-            return Frame([tuple(row) for row in result.fetchall()], columns=[info[0] for info in result.description])
+            try:
+                return Frame([tuple(row) for row in result.fetchall()], columns=[info[0] for info in result.description])
+            except ProgrammingError:
+                return None
 
         data = [get_frame_from_result(result)]
         while result.nextset():
