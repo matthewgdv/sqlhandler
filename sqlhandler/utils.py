@@ -29,7 +29,9 @@ class AlchemyBound:
 
 class StoredProcedure(AlchemyBound):
     def __init__(self, name: str, schema: str = "dbo", alchemy: Alchemy = None) -> None:
-        self.alchemy, self.name, self.schema, self.result = alchemy, name, schema, None
+        self.alchemy, self.name, self.schema = alchemy, name, schema
+        self.frames: List[Frame] = None
+        self.results: List[List[Frame]] = []
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self.execute(*args, **kwargs)
@@ -38,6 +40,7 @@ class StoredProcedure(AlchemyBound):
         cursor = self.alchemy.engine.raw_connection().cursor()
         result = cursor.execute(f"EXEC {self.schema}.{self.name} {', '.join(list('?'*len(args)) + [f'@{arg}=?' for arg in kwargs.keys()])};", *[*args, *list(kwargs.values())])
         self.frames = self._get_frames_from_result(result)
+        self.results.append(self.frames)
         return self.frames
 
     @staticmethod
