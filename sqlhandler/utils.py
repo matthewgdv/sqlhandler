@@ -35,7 +35,7 @@ class StoredProcedure(AlchemyBound):
     def __init__(self, name: str, schema: str = "dbo", alchemy: Alchemy = None) -> None:
         self.alchemy, self.name, self.schema = alchemy, name, schema
         self.cursor = self.alchemy.engine.raw_connection().cursor()
-        self.frames: List[Frame] = None
+        self.result: List[Frame] = None
         self.results: List[List[Frame]] = []
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
@@ -46,17 +46,17 @@ class StoredProcedure(AlchemyBound):
 
     def __exit__(self, ex_type: Any, ex_value: Any, ex_traceback: Any) -> None:
         if ex_type is None:
-            self.cursor.commit()
+            self.commit()
         else:
-            self.cursor.rollback()
+            self.rollback()
 
     def execute(self, *args: Any, **kwargs: Any) -> Frame:
         result = self.cursor.execute(f"EXEC {self.schema}.{self.name} {', '.join(list('?'*len(args)) + [f'@{arg}=?' for arg in kwargs.keys()])};", *[*args, *list(kwargs.values())])
 
-        self.frames = self._get_frames_from_result(result)
-        self.results.append(self.frames)
+        self.result = self._get_frames_from_result(result)
+        self.results.append(self.result)
 
-        return self.frames
+        return self
 
     def commit(self) -> None:
         self.cursor.commit()
@@ -107,9 +107,9 @@ class TempManager:
 
 class MetadataCacheHelper:
     def __init__(self, alchemy: Alchemy, maximum_cache_days: int = 5) -> None:
-        from sqlhandler import localres
+        from sqlhandler import resources
 
-        self.cache_file, self.alchemy, self.max_days = localres.newfile("sql_cache.pkl"), alchemy, maximum_cache_days
+        self.cache_file, self.alchemy, self.max_days = resources.newfile("sql_cache.pkl"), alchemy, maximum_cache_days
         self.load_metadata_from_cache()
 
     def load_metadata_from_cache(self) -> None:
