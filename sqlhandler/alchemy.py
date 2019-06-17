@@ -18,7 +18,7 @@ from miscutils import NullContext
 from .custom import Base, Query, Session, Select, Update, Insert, Delete, SelectInto, StringLiteral, BitLiteral
 from .utils import MetadataCacheHelper, TempManager, StoredProcedure, OrmDatabase, Database
 from .log import SqlLog
-from .resources.__config__ import databases
+from .localres.config import databases
 
 
 class Alchemy:

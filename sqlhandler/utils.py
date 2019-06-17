@@ -107,9 +107,9 @@ class TempManager:
 
 class MetadataCacheHelper:
     def __init__(self, alchemy: Alchemy, maximum_cache_days: int = 5) -> None:
-        from sqlhandler import resourcedir
+        from sqlhandler import localres
 
-        self.cache_file, self.alchemy, self.max_days = resourcedir.newfile("__sql_cache__.pkl"), alchemy, maximum_cache_days
+        self.cache_file, self.alchemy, self.max_days = localres.newfile("sql_cache.pkl"), alchemy, maximum_cache_days
         self.load_metadata_from_cache()
 
     def load_metadata_from_cache(self) -> None:

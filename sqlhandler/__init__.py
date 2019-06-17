@@ -5,4 +5,4 @@ from .utils import TempManager
 
 from pathmagic import File
 
-resourcedir = File(__file__).dir.newdir("resources")
+localres = File(__file__).dir.newdir("localres")
