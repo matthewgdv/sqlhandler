@@ -17,7 +17,8 @@ assert datetime, DateTime
 
 class SqlLog(Log):
     def __init__(self, logfile: os.PathLike, active: bool = True) -> None:
-        self.logger: logging.Logger = None
+        self.logger = logging.getLogger('sqlalchemy.engine')
+        self.log_formatter = logging.Formatter('- %(levelname)s - %(message)s')
         self.log_handler: logging.Handler = None
         super().__init__(logfile=logfile, active=active)
 
@@ -30,37 +31,31 @@ class SqlLog(Log):
 
     def activate(self) -> None:
         super().activate()
-        if self.logger is None:
-            self.logger = logging.getLogger('sqlalchemy.engine')
 
         if self.log_handler is None:
-            self.log_handler = logging.FileHandler(self.file.path)
-            self.log_handler.setFormatter(logging.Formatter('- %(levelname)s - %(message)s'))
-            self.log_handler.setLevel(logging.DEBUG)
-            self.logger.addHandler(self.log_handler)
+            self._initialize_handler()
 
-        self.logger.setLevel(logging.DEBUG)
+        self.set_log_level()
 
     def deactivate(self, openfile: bool = True) -> None:
         super().deactivate()
         SqlProcessor(self)
 
-        self.logger.setLevel(logging.ERROR)
-        self.logger.removeHandler(self.log_handler)
-        self.log_handler.close()
-        self.log_handler = None
+        self.set_log_level()
+        if self.log_handler is not None:
+            self.log_handler.close()
 
         if openfile:
             self.open()
 
-    def log_statements_only(self, statements_only: bool = False) -> None:
-        if statements_only:
-            self.log_handler.setLevel(logging.INFO)
+    def set_log_level(self, statements_only: bool = False) -> None:
+        if not self._active:
+            self.logger.setLevel(logging.ERROR)
         else:
-            if self._active:
-                self.log_handler.setLevel(logging.DEBUG)
+            if statements_only:
+                self.logger.setLevel(logging.INFO)
             else:
-                self.log_handler.setLevel(logging.ERROR)
+                self.logger.setLevel(logging.DEBUG)
 
     def write_comment(self, text: str, single_line_comment_cutoff: int = 5, add_newlines: int = 2) -> None:
         if self._active:
@@ -69,6 +64,12 @@ class SqlLog(Log):
             else:
                 self.file.contents += "/*\n" + text.strip() + "\n*/"
             self.file.contents += "\n" * add_newlines
+
+    def _initialize_handler(self) -> None:
+        self.log_handler = logging.FileHandler(self.file.path)
+        self.log_handler.setFormatter(self.log_formatter)
+        self.log_handler.setLevel(logging.DEBUG)
+        self.logger.addHandler(self.log_handler)
 
     @classmethod
     def from_details(cls, log_name: str, log_dir: str = None, active: bool = True, file_extension: str = "sql") -> SqlLog:
@@ -88,11 +89,11 @@ class SqlProcessor:
             self.final_formatting()
 
     def process_datetimes_nones_and_bools(self) -> None:
-        stage1 = witchcraft.sub(r"[Dd]ate[Tt]ime(\.[a-z]{4,8})?\(([0-9]+, )+[0-9]+\)", lambda m: f"'{eval(m.group())}'", self.log.file.contents)
-        stage2 = witchcraft.sub(r"- DEBUG - Row.*[( ]None[,)]", lambda m: m.group().replace("None", "'NULL'"), stage1)
-        stage3 = witchcraft.sub(r"[( ]None[,)]", lambda m: m.group().replace("None", "NULL"), stage2)
-        stage4 = witchcraft.sub(r"[( ]True[,)]", lambda m: m.group().replace("True", "1"), stage3)
-        stage5 = witchcraft.sub(r"[( ]False[,)]", lambda m: m.group().replace("False", "0"), stage4)
+        stage1 = Str(self.log.file.contents).sub(r"[Dd]ate[Tt]ime(\.[a-z]{4,8})?\(([0-9]+, )+[0-9]+\)", lambda m: f"'{eval(m.group())}'")
+        stage2 = stage1.sub(r"- DEBUG - Row.*[( ]None[,)]", lambda m: m.group().replace("None", "'NULL'"))
+        stage3 = stage2.sub(r"[( ]None[,)]", lambda m: m.group().replace("None", "NULL"))
+        stage4 = stage3.sub(r"[( ]True[,)]", lambda m: m.group().replace("True", "1"))
+        stage5 = stage4.sub(r"[( ]False[,)]", lambda m: m.group().replace("False", "0"))
         self.log.file.contents = stage5
 
     def collapse_multi_lines(self) -> None:

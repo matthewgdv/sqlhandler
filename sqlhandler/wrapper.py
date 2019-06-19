@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 class ExpressionWrapper:
     def __init__(self, expression: Union[Select, Update, Insert, Delete, SelectInto], silently: bool = False) -> None:
-        from mattlib.libs.sql.modules.custom import Select
+        from .custom import Select
 
         self.expression, self.alchemy, self.silently = expression, expression.alchemy, silently
         self.pre_select = self.pre_select_from_select = self.post_select = self.post_select_inserts = self.post_select_all = self.force_autocommit = False
@@ -32,7 +32,7 @@ class ExpressionWrapper:
             if self.pre_select_from_select and self.expression.select is not None:
                 self._perform_pre_select_from_select()
 
-            self.result: alch.engine.ResultProxy = self.alchemy.session.execute(self.expression)
+            self.result = self.alchemy.session.execute(self.expression)
             self._determine_rowcount()
 
             if self.alchemy.printing or not self.alchemy.autocommit:
@@ -53,7 +53,7 @@ class ExpressionWrapper:
             self.alchemy.resolve_tran(force_autocommit=self.force_autocommit)
 
     def _determine_attrs(self) -> None:
-        from mattlib.libs.sql.modules.custom import Update, Insert, Delete, SelectInto
+        from .custom import Update, Insert, Delete, SelectInto
 
         expression_settings = {
             Update: ["pre_select", "post_select"],
@@ -90,7 +90,7 @@ class ExpressionWrapper:
             self.rowcount = len(ExpressionWrapper(self.expression.select, silently=self.silently).frame.index)
 
     def _determine_rowcount(self) -> None:
-        from mattlib.libs.sql.modules.custom import Insert
+        from .custom import Insert
 
         if not self.result.rowcount == -1:
             self.rowcount = self.result.rowcount
