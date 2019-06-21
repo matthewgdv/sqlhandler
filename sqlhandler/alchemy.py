@@ -11,15 +11,13 @@ from sqlalchemy.orm import aliased, backref, make_transient, relationship
 from maybe import Maybe
 from subtypes import Frame
 from pathmagic import File
-from miscutils import NullContext, Cache
+from miscutils import NullContext
 
 from .custom import Base, Query, Session, Select, Update, Insert, Delete, SelectInto, StringLiteral, BitLiteral
 from .utils import TempManager, StoredProcedure
 from .log import SqlLog
 from .localres.config import databases
 from .database import DatabaseHandler
-
-from sqlhandler import resources
 
 # TODO: create Config class
 
@@ -36,8 +34,7 @@ class Alchemy:
         self.engine = self._create_engine()
         self.session = Session.from_alchemy(self)(self.engine)
 
-        self.cache = Cache(file=resources.newfile(name="sql_cache", extension="pkl"), days=5)
-        self.database = Cache.setdefault(self.database_name, DatabaseHandler(name=self.database_name)).bind(self.engine)
+        self.database = DatabaseHandler(self)
 
         self.log, self.printing, self.autocommit = log, printing, autocommit
 

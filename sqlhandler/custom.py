@@ -8,6 +8,7 @@ from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.orm.util import AliasedClass
 from sqlalchemy.sql.base import ImmutableColumnCollection
+from sqlalchemy.dialects.mssql import BIT
 import sqlparse
 import sqlparse.sql as sqltypes
 
@@ -312,7 +313,7 @@ class StringLiteral(alch.sql.sqltypes.String):
         return process
 
 
-class BitLiteral(alch.dialects.mssql.BIT):
+class BitLiteral(BIT):
     def literal_processor(self, dialect: Any) -> Any:
         super_processor = super().literal_processor(dialect)
 
