@@ -1,24 +1,27 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Set, Tuple, Dict, Union
+from typing import Any, Set, Tuple, Dict
 
 import numpy as np
 import pandas as pd
 import sqlalchemy as alch
-from sqlalchemy.ext.automap import AutomapBase, automap_base
-from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import aliased, backref, make_transient, relationship
 
 from maybe import Maybe
-from subtypes import Str, Frame
+from subtypes import Frame
 from pathmagic import File
-from miscutils import NullContext
+from miscutils import NullContext, Cache
 
 from .custom import Base, Query, Session, Select, Update, Insert, Delete, SelectInto, StringLiteral, BitLiteral
-from .utils import MetadataCacheHelper, TempManager, StoredProcedure, OrmDatabase, Database
+from .utils import TempManager, StoredProcedure
 from .log import SqlLog
 from .localres.config import databases
+from .database import DatabaseHandler
+
+from sqlhandler import resources
+
+# TODO: create Config class
 
 
 class Alchemy:
@@ -28,23 +31,13 @@ class Alchemy:
     The custom query class provided by the Alchemy object's 'session' attribute also has additional methods. Many commonly used sqlalchemy objects are bound to this object as attributes for easy access.
     """
 
-    def __init__(self, schemas: Set[str] = None, database: str = None, log: File = None, printing: bool = False, autocommit: bool = False) -> None:
-        self.server, self.database = self._get_database_connection_credentials(db=database)
+    def __init__(self, database: str = None, log: File = None, printing: bool = False, autocommit: bool = False) -> None:
+        self.server_name, self.database_name = self._get_database_connection_credentials(db=database)
         self.engine = self._create_engine()
         self.session = Session.from_alchemy(self)(self.engine)
 
-        self.declaration: Base = None
-        self.reflection: AutomapBase = None
-
-        self._cacher = MetadataCacheHelper(alchemy=self)
-
-        self.meta: alch.MetaData = self._cacher.database.meta
-        self.meta.bind = self.engine
-
-        self._schemas = self._cacher.database.schemas
-        self.schemas = Maybe(schemas).else_({None})
-
-        self.tables, self.objects = OrmDatabase(self), Database(self)
+        self.cache = Cache(file=resources.newfile(name="sql_cache", extension="pkl"), days=5)
+        self.database = Cache.setdefault(self.database_name, DatabaseHandler(name=self.database_name)).bind(self.engine)
 
         self.log, self.printing, self.autocommit = log, printing, autocommit
 
@@ -59,15 +52,10 @@ class Alchemy:
         pd.set_option("max_columns", None)
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(engine={repr(self.engine)}, Tables={len(self)})"
+        return f"{type(self).__name__}(engine={repr(self.engine)}, num_tables={len(self)})"
 
     def __len__(self) -> int:
-        return len(self.meta.tables)
-
-    def __getitem__(self, key: str) -> alch.Table:
-        if key not in self.meta.tables:
-            self.refresh()
-        return self.meta.tables[key]
+        return len(self.database.meta.tables)
 
     def __enter__(self) -> Alchemy:
         self.session.rollback()
@@ -80,12 +68,12 @@ class Alchemy:
             self.session.rollback()
 
     @property
-    def schemas(self) -> Set[str]:
-        return self._schemas
+    def orm(self) -> Set[str]:
+        return self.database.orm
 
-    @schemas.setter
-    def schemas(self, val: Set[str]) -> None:
-        self._extend_metadata(schemas=val)
+    @property
+    def objects(self) -> Set[str]:
+        return self.database.objects
 
     @property
     def log(self) -> SqlLog:
@@ -136,8 +124,9 @@ class Alchemy:
         if if_exists.lower() != "append":
             self.prepend_identity_field_to_table(table=table, schema=schema, field_name=primary_key)
 
-        self.refresh_table(table=f"{(Maybe(schema) + '.').else_('')}{table}")
-        return getattr(getattr(self.tables, Maybe(schema).else_('dbo')), table)
+        # self.refresh_table(table=f"{(Maybe(schema) + '.').else_('')}{table}")
+        self.refresh_table(table=table, schema=schema)
+        return self.orm[schema][table]
 
     @staticmethod
     def orm_to_frame(orm_objects: Any) -> Frame:
@@ -175,22 +164,15 @@ class Alchemy:
                 if self.printing:
                     print("\nROLLBACK;\n")
 
+    def refresh_table(self, table: alch.schema.Table) -> None:
+        self.database.refresh_table(table=table)
+
     def drop_table(self, table: alch.schema.Table) -> None:
-        """Drop a table or the table belonging to to an ORM class and remove it from the metadata."""
-        table = self._normalize_table(table)
-        table.drop()
-        self.meta.remove(table)
-        self.refresh()
+        """Drop a table or the table belonging to an ORM class and remove it from the metadata."""
+        self.database.drop_table(table)
 
-    def refresh_table(self, table: Union[str, alch.schema.Table, Base]) -> alch.schema.Table:
-        table = self._normalize_table(table)
-        name, schema = table.name, table.schema
-        self.meta.remove(table)
-        self.refresh()
-        return self[f"{(Maybe(schema) + '.').else_('')}{name}"]
-
-    def refresh(self, clear_first: bool = False) -> None:
-        (self._refresh_metadata if clear_first else self._extend_metadata)(self.schemas)
+    def clear_metadata(self) -> None:
+        self.database.clear()
 
     def prepend_identity_field_to_table(self, table: str, schema: str = None, field_name: str = "id") -> None:
         tableschema = f"{(Maybe(schema) + '.').else_('')}{table}"
@@ -198,7 +180,7 @@ class Alchemy:
         with TempManager(alchemy=self) as tmp:
             self.session.execute(f"ALTER TABLE {tableschema} ADD __tmp_id__ INT IDENTITY(1, 1) NOT NULL;", autocommit=True)
 
-            sqltable = self.refresh_table(tableschema)
+            sqltable = self.refresh_table(table=table, schema=schema)
             self.SelectInto([sqltable.c.__tmp_id__.label(field_name)] + [sqltable.c[col.name] for col in sqltable.columns if col.name not in [field_name, "__tmp_id__"]], table=str(tmp)).execute(autocommit=True)
             self.drop_table(sqltable)
 
@@ -207,34 +189,9 @@ class Alchemy:
 
     # Private internal methods
 
-    def _extend_metadata(self, schemas: Set[str]) -> None:
-        self._schemas = self.schemas.union(schemas)
-        for schema in self.schemas:
-            self.meta.reflect(schema=schema, views=True)
-        self._refresh_bases()
-        self._cacher.save_metadata_to_cache()
-
-    def _refresh_metadata(self, schemas: Set[str]) -> None:
-        self.meta.clear()
-        self._schemas = set()
-        self._extend_metadata(schemas)
-
-    def _refresh_bases(self) -> None:
-        self.declaration = declarative_base(bind=self.engine, metadata=self.meta, cls=Base)
-        self.declaration.alchemy = self
-        self.reflection = automap_base(declarative_base=self.declaration)
-        self.reflection.prepare(name_for_collection_relationship=self._pluralize_collection)
-
-    def _normalize_table(self, table: Any) -> alch.schema.Table:
-        if hasattr(table, "__table__"):
-            table = table.__table__
-        if isinstance(table, str):
-            table = self[table]
-        return table
-
     def _create_engine(self) -> alch.engine.base.Engine:
-        temp_engine = alch.create_engine(fR"mssql+pyodbc://@{self.server}/{self.database}?driver=SQL+Server", echo=False)
-        return alch.create_engine(fR"mssql+pyodbc://@{self.server}/{self.database}?driver=SQL+Server", echo=False, dialect=self._create_literal_dialect(type(temp_engine.dialect)))
+        temp_engine = alch.create_engine(fR"mssql+pyodbc://@{self.server_name}/{self.database_name}?driver=SQL+Server", echo=False)
+        return alch.create_engine(fR"mssql+pyodbc://@{self.server_name}/{self.database_name}?driver=SQL+Server", echo=False, dialect=self._create_literal_dialect(type(temp_engine.dialect)))
 
     def _create_literal_dialect(self, dialect_class: alch.engine.default.DefaultDialect) -> alch.engine.default.DefaultDialect:
         class LiteralDialect(dialect_class):
@@ -296,9 +253,3 @@ class Alchemy:
             raise RuntimeError(f"""Cannot establish database connection implicitly. Must be using one of the following supported PCs:\n\n{", ".join([f"'{pc}'" for pc in databases])}.""")
 
         return server, database
-
-    @staticmethod
-    def _pluralize_collection(base: Any, local_cls: Any, referred_cls: Any, constraint: Any) -> str:
-        """Produce a 'snake_cased', 'pluralized' class name, e.g. 'SomeTerm' -> 'some_terms'"""
-        referred_name = referred_cls.__name__
-        return str(Str(referred_name).snake_case().plural())
