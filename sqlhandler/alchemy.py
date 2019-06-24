@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Set, Tuple, Dict
+from typing import Any, Set, Tuple, Dict, TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
@@ -18,6 +18,9 @@ from .utils import TempManager, StoredProcedure
 from .log import SqlLog
 from .localres.config import databases
 from .database import DatabaseHandler
+
+if TYPE_CHECKING:
+    import alembic
 
 # TODO: create Config class
 
@@ -71,6 +74,13 @@ class Alchemy:
     @property
     def objects(self) -> Set[str]:
         return self.database.objects
+
+    @property
+    def operations(self) -> alembic.operations.Operations:
+        from alembic.migration import MigrationContext
+        from alembic.operations import Operations
+
+        return Operations(MigrationContext.configure(self.engine.connect()))
 
     @property
     def log(self) -> SqlLog:
