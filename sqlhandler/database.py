@@ -55,7 +55,7 @@ class DatabaseHandler:
 
     def _refresh_bases(self) -> None:
         self.declaration = declarative_base(bind=self.alchemy.engine, metadata=self.meta, cls=Base)
-        self.declaration.alchemy = self
+        self.declaration.alchemy = self.alchemy
         self.reflection = automap_base(declarative_base=self.declaration)
         self.reflection.prepare(name_for_collection_relationship=self._pluralize_collection)
 
@@ -102,8 +102,8 @@ class Database(NameSpace):
     def _set_schemas_from_tables(self, tables: list) -> None:
         schemas = {}
         for table in tables:
-            table = Maybe(table).__table__.else_(table)
-            schemas.setdefault(table.schema, []).append(table)
+            schema = Maybe(table).__table__.else_(table).schema
+            schemas.setdefault(schema, []).append(table)
 
         for schema, tables in schemas.items():
             self._add_schema(schema, tables)
