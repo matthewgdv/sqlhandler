@@ -93,6 +93,7 @@ class Alchemy:
     def initialize_log(self, logname: str, logdir: str = None) -> SqlLog:
         """Instantiates a matt.log.SqlLog object from a name and a dirpath, and binds it to this object's 'log' attribute. If 'active' argument is 'False', this method does nothing."""
         self._log = SqlLog.from_details(log_name=logname, log_dir=logdir, active=False)
+        return self._log
 
     # Conversion Methods
 
