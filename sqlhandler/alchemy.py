@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
+
 from typing import Any, Set, Dict
+
 
 import numpy as np
 import pandas as pd
@@ -18,6 +20,9 @@ from .utils import TempManager, StoredProcedure
 from .log import SqlLog
 from .database import DatabaseHandler
 from .config import Config
+
+if TYPE_CHECKING:
+    import alembic
 
 
 class Alchemy:
@@ -70,6 +75,13 @@ class Alchemy:
         return self.database.objects
 
     @property
+    def operations(self) -> alembic.operations.Operations:
+        from alembic.migration import MigrationContext
+        from alembic.operations import Operations
+
+        return Operations(MigrationContext.configure(self.engine.connect()))
+
+    @property
     def log(self) -> SqlLog:
         return self._log
 
@@ -80,6 +92,7 @@ class Alchemy:
     def initialize_log(self, logname: str, logdir: str = None) -> SqlLog:
         """Instantiates a matt.log.SqlLog object from a name and a dirpath, and binds it to this object's 'log' attribute. If 'active' argument is 'False', this method does nothing."""
         self._log = SqlLog.from_details(log_name=logname, log_dir=logdir, active=False)
+        return self._log
 
     # Conversion Methods
 
