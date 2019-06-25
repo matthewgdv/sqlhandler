@@ -22,6 +22,7 @@ class DatabaseHandler:
 
         self._refresh_bases()
         self.orm, self.objects = Database(handler=self, tables=list(self.reflection.classes)), Database(handler=self, tables=[self.meta.tables[item] for item in self.meta.tables])
+        self.reflect()
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
@@ -30,8 +31,8 @@ class DatabaseHandler:
         self.meta.reflect(schema=schema, views=True)
 
         self._refresh_bases()
-        self.objects._add_schema(name=schema, tables=[table for table in [self.meta.tables[item] for item in self.meta.tables] if table.schema.lower() == schema.lower()])
-        self.orm._add_schema(name=schema, tables=[table for table in self.reflection.classes if table.__table__.schema.lower() == schema.lower()])
+        self.objects._add_schema(name=schema, tables=[table for table in [self.meta.tables[item] for item in self.meta.tables] if Maybe(table.schema).lower().else_(None) == Maybe(schema).lower().else_(None)])
+        self.orm._add_schema(name=schema, tables=[table for table in self.reflection.classes if Maybe(table.__table__.schema).lower().else_(None) == Maybe(schema).lower().else_(None)])
 
         self.cache[self.name] = self.meta
 
@@ -50,6 +51,7 @@ class DatabaseHandler:
 
     def clear(self) -> None:
         self.meta.clear()
+        self.cache[self.name] = self.meta
         for namespace in (self.orm, self.objects):
             namespace._clear_namespace()
 
