@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import os
-from typing import Any, Set, Tuple, Dict, TYPE_CHECKING
+
+from typing import Any, Set, Dict
+
 
 import numpy as np
 import pandas as pd
@@ -16,13 +18,11 @@ from miscutils import NullContext
 from .custom import Base, Query, Session, Select, Update, Insert, Delete, SelectInto, StringLiteral, BitLiteral
 from .utils import TempManager, StoredProcedure
 from .log import SqlLog
-from .localres.config import databases
 from .database import DatabaseHandler
+from .config import Config
 
 if TYPE_CHECKING:
     import alembic
-
-# TODO: create Config class
 
 
 class Alchemy:
@@ -32,9 +32,8 @@ class Alchemy:
     The custom query class provided by the Alchemy object's 'session' attribute also has additional methods. Many commonly used sqlalchemy objects are bound to this object as attributes for easy access.
     """
 
-    def __init__(self, database: str = None, log: File = None, printing: bool = False, autocommit: bool = False) -> None:
-        self.server_name, self.database_name = self._get_database_connection_credentials(db=database)
-        self.engine = self._create_engine()
+    def __init__(self, host: str = None, database: str = None, log: File = None, printing: bool = False, autocommit: bool = False) -> None:
+        self.engine = self._create_engine(host=host, database=database)
         self.session = Session.from_alchemy(self)(self.engine)
 
         self.database = DatabaseHandler(self)
@@ -132,7 +131,6 @@ class Alchemy:
         if if_exists.lower() != "append":
             self.prepend_identity_field_to_table(table=table, schema=schema, field_name=primary_key)
 
-        # self.refresh_table(table=f"{(Maybe(schema) + '.').else_('')}{table}")
         self.refresh_table(table=table, schema=schema)
         return self.orm[schema][table]
 
@@ -197,9 +195,9 @@ class Alchemy:
 
     # Private internal methods
 
-    def _create_engine(self) -> alch.engine.base.Engine:
-        temp_engine = alch.create_engine(fR"mssql+pyodbc://@{self.server_name}/{self.database_name}?driver=SQL+Server", echo=False)
-        return alch.create_engine(fR"mssql+pyodbc://@{self.server_name}/{self.database_name}?driver=SQL+Server", echo=False, dialect=self._create_literal_dialect(type(temp_engine.dialect)))
+    def _create_engine(self, host: str, database: str) -> alch.engine.base.Engine:
+        url = Config().generate_url(host=host, database=database)
+        return alch.create_engine(str(url), echo=False, dialect=self._create_literal_dialect(url.get_dialect()))
 
     def _create_literal_dialect(self, dialect_class: alch.engine.default.DefaultDialect) -> alch.engine.default.DefaultDialect:
         class LiteralDialect(dialect_class):
@@ -243,21 +241,3 @@ class Alchemy:
                 raise TypeError(f"Don't know how to process column type '{series.dtype}' of '{series.name}'.")
 
         return {name: sqlalchemy_dtype_from_series(col) for name, col in frame.infer_objects().iteritems() if col.dtype.name in ["int64", "Int64", "object"]}
-
-    @staticmethod
-    def _get_database_connection_credentials(db: str) -> Tuple[str, str]:
-        """Fetch server and database names from the config file (PC-name-specific)."""
-        pc_name = os.environ["COMPUTERNAME"]
-        if pc_name in databases:
-            server = databases[pc_name]["server"]
-            if db is None:
-                database = databases[pc_name]["default_database"]
-            else:
-                if db in databases[pc_name]["databases"]:
-                    database = db
-                else:
-                    raise ValueError(f"""Unrecognized Database: '{db}'. Known databases are: {", ".join([f"'{name}'" for name in databases[pc_name]["databases"]])}.""")
-        else:
-            raise RuntimeError(f"""Cannot establish database connection implicitly. Must be using one of the following supported PCs:\n\n{", ".join([f"'{pc}'" for pc in databases])}.""")
-
-        return server, database

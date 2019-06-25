@@ -16,7 +16,7 @@ from .custom import Base
 
 class DatabaseHandler:
     def __init__(self, alchemy) -> None:
-        self.alchemy, self.name, self.cache = alchemy, alchemy.database_name, Cache(file=resources.newfile(name="sql_cache", extension="pkl"), days=5)
+        self.alchemy, self.name, self.cache = alchemy, alchemy.engine.url.database, Cache(file=resources.newfile(name="sql_cache", extension="pkl"), days=5)
         self.meta = self._get_metadata()
         self.declaration = self.reflection = None  # type: Base
 
