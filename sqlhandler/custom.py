@@ -50,6 +50,18 @@ class Base:
     def c(cls, colname: str = None) -> Union[ImmutableColumnCollection, alch.Column]:
         return cls.__table__.c if colname is None else cls.__table__.c[colname]
 
+    @classmethod
+    def all(cls) -> List[Base]:
+        return cls.alchemy.session.query(cls).all()
+
+    @classmethod
+    def first(cls) -> Base:
+        return cls.alchemy.session.query(cls).first()
+
+    @classmethod
+    def to_frame(cls) -> Frame:
+        return cls.alchemy.session.query(cls).frame()
+
     def frame(self) -> Frame:
         return self.alchemy.orm_to_frame(self)
 
