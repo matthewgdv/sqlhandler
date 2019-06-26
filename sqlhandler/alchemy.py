@@ -121,15 +121,19 @@ class Alchemy:
         """Bulk insert the contents of the target '.xlsx' file to the specified table. The table is created with Primary Key 'id' field. Options for 'if_exists' are 'fail' (default), 'append', and 'replace'."""
         return self.frame_to_table(self.excel_to_frame(os.fspath(filepath)), table=tablename, schema=schema, if_exists=if_exists)
 
-    def frame_to_table(self, dataframe: pd.DataFrame, table: str, schema: str = None, if_exists: str = "fail", primary_key: str = "id") -> Base:
+    def frame_to_table(self, dataframe: pd.DataFrame, table: str, schema: str = None, if_exists: str = "fail", primary_key: str = "id", identity: bool = True) -> Base:
         """Bulk insert the contents of a pandas DataFrame to the specified table. The table is created with a Primary Key 'id' field. Options for 'if_exists' are 'fail' (default), 'append', and 'replace'."""
-        if primary_key in dataframe.columns:
-            raise ValueError("DataFrame may not have a column named 'id'.")
+        if primary_key is not None:
+            if primary_key in dataframe.columns:
+                raise ValueError(f"{type(dataframe).__name__} may not have a column named '{primary_key}'.")
 
-        dataframe.infer_dtypes().to_sql(table, self.engine, schema=schema, if_exists=if_exists, index=False, dtype=self._sql_dtype_dict_from_frame(dataframe))
+            if identity:
+                dataframe.reset_index(inplace=True, drop=True)
+                dataframe.index += 1
 
-        if if_exists.lower() != "append":
-            self.prepend_identity_field_to_table(table=table, schema=schema, field_name=primary_key)
+        pk = Maybe(primary_key).else_(None)
+        dtypes = self._sql_dtype_dict_from_frame(dataframe)
+        dataframe.infer_dtypes().to_sql(engine=self.engine, name=table, if_exists=if_exists, index=primary_key is not None, index_label=pk, primary_key=pk, schema=schema, dtype=dtypes)
 
         self.refresh_table(table=table, schema=schema)
         return self.orm[schema][table]
@@ -170,8 +174,8 @@ class Alchemy:
                 if self.printing:
                     print("\nROLLBACK;\n")
 
-    def refresh_table(self, table: alch.schema.Table) -> None:
-        self.database.refresh_table(table=table)
+    def refresh_table(self, table: alch.schema.Table, schema: str = None) -> None:
+        self.database.refresh_table(table=table, schema=schema)
 
     def drop_table(self, table: alch.schema.Table) -> None:
         """Drop a table or the table belonging to an ORM class and remove it from the metadata."""
@@ -179,19 +183,6 @@ class Alchemy:
 
     def clear_metadata(self) -> None:
         self.database.clear()
-
-    def prepend_identity_field_to_table(self, table: str, schema: str = None, field_name: str = "id") -> None:
-        tableschema = f"{(Maybe(schema) + '.').else_('')}{table}"
-
-        with TempManager(alchemy=self) as tmp:
-            self.session.execute(f"ALTER TABLE {tableschema} ADD __tmp_id__ INT IDENTITY(1, 1) NOT NULL;", autocommit=True)
-
-            sqltable = self.refresh_table(table=table, schema=schema)
-            self.SelectInto([sqltable.c.__tmp_id__.label(field_name)] + [sqltable.c[col.name] for col in sqltable.columns if col.name not in [field_name, "__tmp_id__"]], table=str(tmp)).execute(autocommit=True)
-            self.drop_table(sqltable)
-
-            self.SelectInto([tmp()], table=table, schema=schema).execute(autocommit=True)
-            self.session.execute(f"ALTER TABLE {tableschema} ADD CONSTRAINT pk_{tableschema.replace('.', '_')} PRIMARY KEY CLUSTERED (id);", autocommit=True)
 
     # Private internal methods
 
