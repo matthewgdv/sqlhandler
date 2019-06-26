@@ -9,7 +9,7 @@ import sqlparse
 from sqlalchemy.orm import Query
 from pyodbc import ProgrammingError
 
-from subtypes import Frame
+from subtypes import Frame, Str
 
 if TYPE_CHECKING:
     from .alchemy import Alchemy
@@ -111,5 +111,5 @@ def literalstatement(statement: Any, format_statement: bool = True) -> str:
 
     bound = statement.compile(compile_kwargs={'literal_binds': True}).string + ";"
     formatted = sqlparse.format(bound, reindent=True, wrap_after=1000) if format_statement else bound  # keyword_case="upper" (removed arg due to false positives)
-    final = witchcraft.sub(r"\bOVER \(\s*", lambda m: m.group().strip(), formatted)
+    final = Str(formatted).sub(r"\bOVER \(\s*", lambda m: m.group().strip()).sub(r"(?<=\n)([^\n]*JOIN[^\n]*)(\bON\b[^\n]*)(?=\n)", lambda m: f"  {m.group(1).strip()}\n    {m.group(2).strip()}")
     return str(final)
