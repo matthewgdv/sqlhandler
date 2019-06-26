@@ -57,6 +57,20 @@ class Base:
         self.alchemy.session.add(self)
         return self
 
+    def update(self, argdeltas: dict = None, **update_kwargs: Any,) -> Base:
+        if argdeltas is not None:
+            for key, val in argdeltas.items():
+                setattr(self, Maybe(key).key.else_(key), val)
+        else:
+            for key, val in update_kwargs.items():
+                setattr(self, key, val)
+
+        return self
+
+    def delete(self) -> Base:
+        self.alchemy.session.delete(self)
+        return self
+
 
 class Session(alch.orm.Session, AlchemyBound):
     """Custom subclass of sqlalchemy.orm.Session granting access to a custom Query class through the '.query()' method."""
