@@ -14,6 +14,8 @@ from miscutils import Log
 
 assert datetime, DateTime
 
+# TODO: implement better logging that uses PrintLog and doesn't rely on python logging module
+
 
 class SqlLog(Log):
     def __init__(self, logfile: os.PathLike, active: bool = True) -> None:

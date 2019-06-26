@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import re as witchcraft
 from typing import Any, List, Callable, TypeVar, TYPE_CHECKING
 
 import sqlalchemy as alch
