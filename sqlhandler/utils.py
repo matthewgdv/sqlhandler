@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import contextlib
 from typing import Any, List, Callable, TypeVar, TYPE_CHECKING
 
 import sqlalchemy as alch
@@ -31,6 +32,7 @@ class AlchemyBound:
 class StoredProcedure(AlchemyBound):
     def __init__(self, name: str, schema: str = "dbo", alchemy: Alchemy = None) -> None:
         self.alchemy, self.name, self.schema = alchemy, name, schema
+        self.exception, self.exceptions = None, []
         self.cursor = self.alchemy.engine.raw_connection().cursor()
         self.result: List[Frame] = None
         self.results: List[List[Frame]] = []
@@ -38,17 +40,27 @@ class StoredProcedure(AlchemyBound):
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self.execute(*args, **kwargs)
 
-    def __enter__(self) -> StoredProcedure:
-        return self
+    def __bool__(self) -> bool:
+        return self.exception is None
 
-    def __exit__(self, ex_type: Any, ex_value: Any, ex_traceback: Any) -> None:
-        if ex_type is None:
-            self.commit()
-        else:
+    @contextlib.contextmanager
+    def transaction(self) -> StoredProcedure:
+        try:
+            yield self
+        except Exception as ex:
             self.rollback()
+            raise ex
+        else:
+            if self.exception is None:
+                self.commit()
+            else:
+                self.rollback()
 
     def execute(self, *args: Any, **kwargs: Any) -> Frame:
-        result = self.cursor.execute(f"EXEC {self.schema}.{self.name} {', '.join(list('?'*len(args)) + [f'@{arg}=?' for arg in kwargs.keys()])};", *[*args, *list(kwargs.values())])
+        try:
+            result = self.cursor.execute(f"EXEC {self.schema}.{self.name} {', '.join(list('?'*len(args)) + [f'@{arg}=?' for arg in kwargs.keys()])};", *[*args, *list(kwargs.values())])
+        except ProgrammingError as ex:
+            self.exception = ex
 
         self.result = self._get_frames_from_result(result)
         self.results.append(self.result)
@@ -57,9 +69,18 @@ class StoredProcedure(AlchemyBound):
 
     def commit(self) -> None:
         self.cursor.commit()
+        self._archive_results_and_exceptions()
 
     def rollback(self) -> None:
         self.cursor.rollback()
+        self._archive_results_and_exceptions()
+
+    def _archive_results_and_exceptions(self) -> None:
+        self.results.append(self.result)
+        self.result = None
+
+        self.exceptions.append(self.exception)
+        self.exception = None
 
     @staticmethod
     def _get_frames_from_result(result: Any) -> List[Frame]:
@@ -73,7 +94,7 @@ class StoredProcedure(AlchemyBound):
         while result.nextset():
             data.append(get_frame_from_result(result))
 
-        return data
+        return [frame for frame in data if frame is not None]
 
 
 class TempManager:
