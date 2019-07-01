@@ -32,13 +32,13 @@ class Alchemy:
     The custom query class provided by the Alchemy object's 'session' attribute also has additional methods. Many commonly used sqlalchemy objects are bound to this object as attributes for easy access.
     """
 
-    def __init__(self, host: str = None, database: str = None, log: File = None, printing: bool = False, autocommit: bool = False) -> None:
+    def __init__(self, host: str = None, database: str = None, log: File = None, autocommit: bool = False) -> None:
         self.engine = self._create_engine(host=host, database=database)
         self.session = Session.from_alchemy(self)(self.engine)
 
         self.database = DatabaseHandler(self)
 
-        self.log, self.printing, self.autocommit = log, printing, autocommit
+        self.log, self.autocommit = log, autocommit
 
         self.Text, self.Literal, self.Case, self.Trans, self.Alias = alch.text, alch.literal, alch.case, make_transient, aliased
         self.AND, self.OR, self.CAST = alch.and_, alch.or_, alch.cast
@@ -124,16 +124,20 @@ class Alchemy:
     def frame_to_table(self, dataframe: pd.DataFrame, table: str, schema: str = None, if_exists: str = "fail", primary_key: str = "id", identity: bool = True) -> Base:
         """Bulk insert the contents of a pandas DataFrame to the specified table. The table is created with a Primary Key 'id' field. Options for 'if_exists' are 'fail' (default), 'append', and 'replace'."""
         if primary_key is not None:
-            if primary_key in dataframe.columns:
-                raise ValueError(f"{type(dataframe).__name__} may not have a column named '{primary_key}'.")
-
             if identity:
                 dataframe.reset_index(inplace=True, drop=True)
+                dataframe.index.names = [primary_key]
                 dataframe.index += 1
+                dataframe.reset_index(inplace=True)
+            else:
+                dataframe.index.names = [primary_key]
+                dataframe.reset_index(inplace=True)
 
-        pk = Maybe(primary_key).else_(None)
         dtypes = self._sql_dtype_dict_from_frame(dataframe)
-        dataframe.infer_dtypes().to_sql(engine=self.engine, name=table, if_exists=if_exists, index=primary_key is not None, index_label=pk, primary_key=pk, schema=schema, dtype=dtypes)
+        if primary_key is not None and identity:
+            dtypes.update({primary_key: alch.types.INT})
+
+        dataframe.infer_dtypes().to_sql(engine=self.engine, name=table, if_exists=if_exists, index=False, index_label=None, primary_key=primary_key, schema=schema, dtype=dtypes)
 
         self.refresh_table(table=table, schema=schema)
         return self.orm[schema][table]

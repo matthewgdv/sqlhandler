@@ -38,11 +38,13 @@ class DatabaseHandler:
 
     def refresh_table(self, table: alch.schema.Table, schema: str = None) -> None:
         table = self._normalize_table(table=table, schema=schema)
-        self.drop_table(table)
-        self.reflect(table.schema)
+        if table is not None:
+            self.drop_table(table)
+        self.reflect(Maybe(table).schema.else_(schema))
 
     def drop_table(self, table: alch.schema.Table, schema: str = None) -> None:
         table = self._normalize_table(table=table, schema=schema)
+        table.drop()
         self.meta.remove(table)
 
         name, schema = table.name, table.schema
@@ -70,7 +72,7 @@ class DatabaseHandler:
         if hasattr(table, "__table__"):
             table = table.__table__
         elif isinstance(table, str):
-            table = self.meta.tables[f"{(Maybe(schema) + '.').else_('')}{table}"]
+            table = self.meta.tables.get(f"{(Maybe(schema) + '.').else_('')}{table}")
 
         return table
 

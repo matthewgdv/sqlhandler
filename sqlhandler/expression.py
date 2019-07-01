@@ -22,8 +22,7 @@ if TYPE_CHECKING:
 class Expression:
     def _prepare_tran(self) -> None:
         self.alchemy.session.rollback()
-        if self.alchemy.printing:
-            self.alchemy.log.write(f"{'-' * 200}\n\nBEGIN TRAN;", add_newlines=2)
+        self.alchemy.log.write(f"{'-' * 200}\n\nBEGIN TRAN;", add_newlines=2)
 
     def _resolve_tran(self, force_commit: bool = False) -> None:
         """Request user confirmation to resolve the ongoing transaction."""
