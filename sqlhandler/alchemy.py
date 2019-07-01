@@ -10,7 +10,6 @@ import pandas as pd
 import sqlalchemy as alch
 from sqlalchemy.orm import aliased, backref, make_transient, relationship
 
-from maybe import Maybe
 from subtypes import Frame
 from pathmagic import File
 
