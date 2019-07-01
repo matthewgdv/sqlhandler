@@ -13,10 +13,10 @@ from sqlalchemy.orm import aliased, backref, make_transient, relationship
 from maybe import Maybe
 from subtypes import Frame
 from pathmagic import File
-from miscutils import NullContext
 
-from .custom import Base, Query, Session, Select, Update, Insert, Delete, SelectInto, StringLiteral, BitLiteral
-from .utils import TempManager, StoredProcedure
+from .custom import Base, Query, Session, StringLiteral, BitLiteral
+from .expression import Select, Update, Insert, Delete, SelectInto
+from .utils import StoredProcedure
 from .log import SqlLog
 from .database import DatabaseHandler
 from .config import Config
@@ -87,7 +87,7 @@ class Alchemy:
 
     @log.setter
     def log(self, val: File) -> None:
-        self._log = SqlLog(logfile=val, active=False) if val is not None else NullContext()
+        self._log = SqlLog(logfile=val, active=False)
 
     def initialize_log(self, logname: str, logdir: str = None) -> SqlLog:
         """Instantiates a matt.log.SqlLog object from a name and a dirpath, and binds it to this object's 'log' attribute. If 'active' argument is 'False', this method does nothing."""
@@ -156,23 +156,6 @@ class Alchemy:
     def excel_to_frame(filepath: os.PathLike, sanitize_colnames: bool = True, **kwargs: Any) -> Frame:
         """Reads in the specified Excel spreadsheet into a pandas DataFrame. Passes on arguments to the pandas read_excel function. Optionally snake_cases column names and strips out non-ascii characters."""
         return Frame.from_excel(os.fspath(filepath), sanitize_colnames=sanitize_colnames, **kwargs)
-
-    def resolve_tran(self, force_autocommit: bool = False) -> None:
-        """Request user confirmation to resolve the ongoing transaction."""
-        if self.autocommit or force_autocommit:
-            self.session.commit()
-            if self.printing:
-                print("COMMIT;\n")
-        else:
-            user_confirmation = input("\nIf you are happy with the above Query/Queries please type COMMIT. Anything else will roll back the ongoing Transaction.\n\n")
-            if user_confirmation.upper() == "COMMIT":
-                self.session.commit()
-                if self.printing:
-                    print("\nCOMMIT;\n")
-            else:
-                self.session.rollback()
-                if self.printing:
-                    print("\nROLLBACK;\n")
 
     def refresh_table(self, table: alch.schema.Table, schema: str = None) -> None:
         self.database.refresh_table(table=table, schema=schema)
