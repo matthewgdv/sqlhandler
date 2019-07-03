@@ -57,6 +57,10 @@ class Base:
     def to_frame(cls) -> Frame:
         return cls.alchemy.session.query(cls).frame()
 
+    @classmethod
+    def query(cls) -> Frame:
+        return cls.alchemy.session.query(cls)
+
     def frame(self) -> Frame:
         return self.alchemy.orm_to_frame(self)
 
