@@ -57,14 +57,13 @@ class StoredProcedure(AlchemyBound):
                 self.rollback()
 
     def execute(self, *args: Any, **kwargs: Any) -> Frame:
+        result = None
         try:
             result = self.cursor.execute(f"EXEC {self.schema}.{self.name} {', '.join(list('?'*len(args)) + [f'@{arg}=?' for arg in kwargs.keys()])};", *[*args, *list(kwargs.values())])
         except ProgrammingError as ex:
             self.exception = ex
 
-        self.result = self._get_frames_from_result(result)
-        self.results.append(self.result)
-
+        self.result = self._get_frames_from_result(result) if result is not None else None
         return self
 
     def commit(self) -> None:
