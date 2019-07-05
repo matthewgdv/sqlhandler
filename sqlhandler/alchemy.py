@@ -8,14 +8,14 @@ from typing import Any, Set, Dict, TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import sqlalchemy as alch
-from sqlalchemy.orm import aliased, backref, make_transient, relationship
+from sqlalchemy.orm import aliased, backref, relationship
 
 from subtypes import Frame
 from pathmagic import File
 
 from .custom import Base, Query, Session, StringLiteral, BitLiteral
 from .expression import Select, Update, Insert, Delete, SelectInto
-from .utils import StoredProcedure
+from .utils import StoredProcedure, clone
 from .log import SqlLog
 from .database import DatabaseHandler
 from .config import Config
@@ -39,11 +39,13 @@ class Alchemy:
 
         self.log, self.autocommit = log, autocommit
 
-        self.Text, self.Literal, self.Case, self.Trans, self.Alias = alch.text, alch.literal, alch.case, make_transient, aliased
-        self.AND, self.OR, self.CAST = alch.and_, alch.or_, alch.cast
         self.Select, self.SelectInto, self.Update = Select.from_alchemy(self), SelectInto.from_alchemy(self), Update.from_alchemy(self)
         self.Insert, self.Delete = Insert.from_alchemy(self), Delete.from_alchemy(self)
         self.StoredProcedure = StoredProcedure.from_alchemy(self)
+
+        self.text, self.literal, self.clone, self.alias = alch.text, alch.literal, clone, aliased
+        self.AND, self.OR, self.CAST, self.CASE = alch.and_, alch.or_, alch.cast, alch.case
+
         self.Table, self.Column, self.ForeignKey, self.Relationship, self.Backref = alch.Table, alch.Column, alch.ForeignKey, relationship, backref
         self.type, self.func, self.sqlalchemy = alch.types, alch.func, alch
 

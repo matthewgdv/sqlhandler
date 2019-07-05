@@ -6,13 +6,14 @@ from typing import Any, List, Callable, TypeVar, TYPE_CHECKING
 import sqlalchemy as alch
 import sqlalchemy.sql.sqltypes
 import sqlparse
-from sqlalchemy.orm import Query
+from sqlalchemy.orm import Query, make_transient
 from pyodbc import ProgrammingError
 
 from subtypes import Frame, Str
 
 if TYPE_CHECKING:
     from .alchemy import Alchemy
+    from .custom import Base
 
 
 SelfType = TypeVar("SelfType")
@@ -132,3 +133,13 @@ def literalstatement(statement: Any, format_statement: bool = True) -> str:
     formatted = sqlparse.format(bound, reindent=True, wrap_after=1000) if format_statement else bound  # keyword_case="upper" (removed arg due to false positives)
     final = Str(formatted).sub(r"\bOVER \(\s*", lambda m: m.group().strip()).sub(r"(?<=\n)([^\n]*JOIN[^\n]*)(\bON\b[^\n]*)(?=\n)", lambda m: f"  {m.group(1).strip()}\n    {m.group(2).strip()}")
     return str(final)
+
+
+def clone(record: Base) -> Base:
+    make_transient(record)
+
+    pk_cols = list(record.__table__.primary_key.columns)
+    for col in pk_cols:
+        setattr(record, col.name, None)
+
+    return record
