@@ -4,17 +4,17 @@ from maybe import Maybe
 from subtypes import Enum
 from pathmagic import PathLike, File
 
-from sqlhandler import resources
+from sqlhandler import localres
 
 from sqlalchemy.engine.url import URL
 
 
 class Config:
     class Dialect(Enum):
-        MsSql, MySql, Sqlite, PostgreSQL, Oracle = "mssql", "mysql", "sqlite", "posgresql", "oracle"
+        MS_SQL, MY_SQL, SQLITE, POSTGRESQL, ORACLE = "mssql", "mysql", "sqlite", "posgresql", "oracle"
 
     def __init__(self, path: PathLike = None) -> None:
-        self.resources = File.from_pathlike(Maybe(path).else_(resources.newfile("config", "json")))
+        self.resources = File.from_resource(localres, "config.json") if path is None else File.from_pathlike(path)
         self.data = Maybe(self.resources.contents).else_({"default_host": None, "hosts": {}})
 
     def __repr__(self) -> str:

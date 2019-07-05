@@ -8,15 +8,16 @@ from sqlalchemy.ext.declarative import declarative_base
 
 from maybe import Maybe
 from subtypes import Str
+from pathmagic import File
 from miscutils import NameSpace, Cache
 
-from sqlhandler import resources
+from sqlhandler import localres
 from .custom import Base
 
 
 class DatabaseHandler:
     def __init__(self, alchemy) -> None:
-        self.alchemy, self.name, self.cache = alchemy, alchemy.engine.url.database, Cache(file=resources.newfile(name="sql_cache", extension="pkl"), days=5)
+        self.alchemy, self.name, self.cache = alchemy, alchemy.engine.url.database, Cache(file=File.from_resource(localres, "sql_cache.pkl"), days=5)
         self.meta = self._get_metadata()
         self.declaration = self.reflection = None  # type: Base
 
