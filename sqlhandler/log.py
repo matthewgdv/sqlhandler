@@ -8,11 +8,10 @@ from miscutils import PrintLog
 class SqlLog(PrintLog):
     def __enter__(self, *args, **kwargs) -> PrintLog:
         self.activate()
-        return super().__enter__(*args, **kwargs)
+        return self
 
     def __exit__(self, ex_type: Any, ex_value: Any, ex_traceback: Any) -> None:
         self.deactivate()
-        return super().__exit__(ex_type=ex_type, ex_value=ex_value, ex_traceback=ex_traceback)
 
     def deactivate(self, openfile: bool = True) -> None:
         super().deactivate()
