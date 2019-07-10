@@ -103,7 +103,7 @@ class Select(alch.sql.Select, AlchemyBound):
     def resolve(self) -> pd.DataFrame:
         frame = self._select_to_frame()
         self.alchemy.log.write(str(self), add_newlines=2)
-        self.alchemy.log.write_comment(frame.to_ascii(), add_newlines=2)
+        self.alchemy.log.write_comment(frame.applymap(lambda val: 1 if val is True else (0 if val is False else ("NULL" if val is None else val))).to_ascii(), add_newlines=2)
         return frame
 
     def literal(self) -> str:
@@ -165,7 +165,7 @@ class Insert(alch.sql.Insert, AlchemyBound, Expression):
     def resolve(self, silently: bool = False) -> None:
         self._prepare_tran()
         rowcount = self._perform_pre_select_from_select(silently=silently)
-        self._execute_expression_and_determine_rowcount(rowcount=rowcount)
+        rowcount = self._execute_expression_and_determine_rowcount(rowcount=rowcount)
         self._perform_post_select_inserts(rowcount=rowcount, silently=silently)
         self._resolve_tran()
 

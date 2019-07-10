@@ -15,6 +15,9 @@ from sqlhandler import localres
 from .custom import Base
 
 
+# TODO: Fix bug with declarative base occasionally getting collisions when dropping and recreating tables or clearing metadata
+
+
 class DatabaseHandler:
     def __init__(self, alchemy) -> None:
         self.alchemy, self.name, self.cache = alchemy, alchemy.engine.url.database, Cache(file=File.from_resource(localres, "sql_cache.pkl"), days=5)
