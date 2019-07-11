@@ -12,37 +12,37 @@ import sqlparse.sql as sqltypes
 from maybe import Maybe
 from subtypes import Str, Frame, List_
 
-from .utils import AlchemyBound, literalstatement
+from .utils import SqlBoundMixin, literalstatement
 
 
 if TYPE_CHECKING:
-    from .alchemy import Alchemy
+    from .sql import Sql
 
 
-class Expression:
+class ExpressionMixin:
     def _prepare_tran(self) -> None:
-        self.alchemy.session.rollback()
-        self.alchemy.log.write(f"{'-' * 200}\n\nBEGIN TRAN;", add_newlines=2)
+        self.sql.session.rollback()
+        self.sql.log.write(f"{'-' * 200}\n\nBEGIN TRAN;", add_newlines=2)
 
     def _resolve_tran(self, force_commit: bool = False) -> None:
         """Request user confirmation to resolve the ongoing transaction."""
-        if self.alchemy.autocommit or force_commit:
+        if self.sql.autocommit or force_commit:
             self.session.commit()
-            self.alchemy.log.write("COMMIT;", add_newlines=2)
+            self.sql.log.write("COMMIT;", add_newlines=2)
         else:
             user_confirmation = input("\nIf you are happy with the above Query/Queries please type COMMIT. Anything else will roll back the ongoing Transaction.\n\n")
             if user_confirmation.upper() == "COMMIT":
-                self.alchemy.session.commit()
-                self.alchemy.log.write("COMMIT;", add_newlines=2)
+                self.sql.session.commit()
+                self.sql.log.write("COMMIT;", add_newlines=2)
             else:
-                self.alchemy.session.rollback()
-                self.alchemy.log.write("ROLLBACK;", add_newlines=2)
+                self.sql.session.rollback()
+                self.sql.log.write("ROLLBACK;", add_newlines=2)
 
     def _perform_pre_select(self, silently: bool) -> None:
         if silently:
             return
         else:
-            pre_select_object = self.alchemy.Select(["*"]).from_(self.table)
+            pre_select_object = self.sql.Select(["*"]).from_(self.table)
 
             if self._whereclause is not None:
                 pre_select_object = pre_select_object.where(self._whereclause)
@@ -58,8 +58,8 @@ class Expression:
         return None if self.select is None else len((self.select.frame if silently else self.select.resolve)().index)
 
     def _execute_expression_and_determine_rowcount(self, rowcount: int = None) -> None:
-        result = self.alchemy.session.execute(self)
-        self.alchemy.log.write(str(self), add_newlines=2)
+        result = self.sql.session.execute(self)
+        self.sql.log.write(str(self), add_newlines=2)
 
         if rowcount is None:
             rowcount = result.rowcount
@@ -69,24 +69,24 @@ class Expression:
                 if self.select is None:
                     rowcount = len(self.parameters) if isinstance(self.parameters, list) else 1
 
-        self.alchemy.log.write_comment(f"({rowcount} row(s) affected)", add_newlines=2)
+        self.sql.log.write_comment(f"({rowcount} row(s) affected)", add_newlines=2)
 
         return rowcount
 
     def _perform_post_select_inserts(self, rowcount: int, silently: bool) -> None:
         if not silently:
-            self.alchemy.Select(["*"]).select_from(self.table).order_by(getattr(self.table.columns, list(self.table.primary_key)[0].name).desc()).limit(rowcount).resolve()
+            self.sql.Select(["*"]).select_from(self.table).order_by(getattr(self.table.columns, list(self.table.primary_key)[0].name).desc()).limit(rowcount).resolve()
 
     def _perform_post_select_all(self, silently: bool) -> None:
         if not silently:
-            self.alchemy.Select(["*"]).select_from(self.alchemy.Text(f"{self.into}")).resolve()
+            self.sql.Select(["*"]).select_from(self.sql.Text(f"{self.into}")).resolve()
 
 
-class Select(alch.sql.Select, AlchemyBound):
+class Select(alch.sql.Select, SqlBoundMixin):
     """Custom subclass of sqlalchemy.sql.Select with additional useful methods and aliases for existing methods."""
 
-    def __init__(self, *args: Any, alchemy: Alchemy = None, **kwargs: Any) -> None:
-        self.alchemy = alchemy
+    def __init__(self, *args: Any, sql: Sql = None, **kwargs: Any) -> None:
+        self.sql = sql
         aslist = args[0] if len(args) == 1 and isinstance(args[0], list) else [*args]
         super().__init__(aslist, **kwargs)
 
@@ -97,13 +97,13 @@ class Select(alch.sql.Select, AlchemyBound):
         return self.literal()
 
     def frame(self) -> pd.DataFrame:
-        """Execute the query and return the result as a pandas DataFrame. If the Alchemy object's 'printing' attribute is True, the statement and returning table will be printed."""
+        """Execute the query and return the result as a pandas DataFrame. If the Sql object's 'printing' attribute is True, the statement and returning table will be printed."""
         return self._select_to_frame()
 
     def resolve(self) -> pd.DataFrame:
         frame = self._select_to_frame()
-        self.alchemy.log.write(str(self), add_newlines=2)
-        self.alchemy.log.write_comment(frame.applymap(lambda val: 1 if val is True else (0 if val is False else ("NULL" if val is None else val))).to_ascii(), add_newlines=2)
+        self.sql.log.write(str(self), add_newlines=2)
+        self.sql.log.write_comment(frame.applymap(lambda val: 1 if val is True else (0 if val is False else ("NULL" if val is None else val))).to_ascii(), add_newlines=2)
         return frame
 
     def literal(self) -> str:
@@ -115,16 +115,16 @@ class Select(alch.sql.Select, AlchemyBound):
         return self.select_from(*args, **kwargs)
 
     def _select_to_frame(self) -> None:
-        result = self.alchemy.session.execute(self)
+        result = self.sql.session.execute(self)
         cols = [col[0] for col in result.cursor.description]
         return Frame(result.fetchall(), columns=cols)
 
 
-class Update(alch.sql.Update, AlchemyBound, Expression):
+class Update(alch.sql.Update, SqlBoundMixin, ExpressionMixin):
     """Custom subclass of sqlalchemy.sql.Update with additional useful methods and aliases for existing methods."""
 
-    def __init__(self, *args: Any, alchemy: Alchemy = None, **kwargs: Any) -> None:
-        self.alchemy = alchemy
+    def __init__(self, *args: Any, sql: Sql = None, **kwargs: Any) -> None:
+        self.sql = sql
         super().__init__(*args, **kwargs)
 
     def __repr__(self) -> str:
@@ -149,11 +149,11 @@ class Update(alch.sql.Update, AlchemyBound, Expression):
         return self.values(*args, **kwargs)
 
 
-class Insert(alch.sql.Insert, AlchemyBound, Expression):
+class Insert(alch.sql.Insert, SqlBoundMixin, ExpressionMixin):
     """Custom subclass of sqlalchemy.sql.Insert with additional useful methods and aliases for existing methods."""
 
-    def __init__(self, *args: Any, alchemy: Alchemy = None, **kwargs: Any) -> None:
-        self.alchemy = alchemy
+    def __init__(self, *args: Any, sql: Sql = None, **kwargs: Any) -> None:
+        self.sql = sql
         super().__init__(*args, **kwargs)
 
     def __repr__(self) -> str:
@@ -224,11 +224,11 @@ class Insert(alch.sql.Insert, AlchemyBound, Expression):
         return final
 
 
-class Delete(alch.sql.Delete, AlchemyBound, Expression):
+class Delete(alch.sql.Delete, SqlBoundMixin, ExpressionMixin):
     """Custom subclass of sqlalchemy.sql.Delete with additional useful methods and aliases for existing methods."""
 
-    def __init__(self, *args: Any, alchemy: Alchemy = None, **kwargs: Any) -> None:
-        self.alchemy = alchemy
+    def __init__(self, *args: Any, sql: Sql = None, **kwargs: Any) -> None:
+        self.sql = sql
         super().__init__(*args, **kwargs)
 
     def __repr__(self) -> str:
@@ -248,11 +248,11 @@ class Delete(alch.sql.Delete, AlchemyBound, Expression):
         return literalstatement(self)
 
 
-class SelectInto(alch.sql.Select, AlchemyBound, Expression):
+class SelectInto(alch.sql.Select, SqlBoundMixin, ExpressionMixin):
     """Custom subclass of sqlalchemy.sql.Select for 'SELECT * INTO #tmp' syntax with additional useful methods and aliases for existing methods."""
 
-    def __init__(self, columns: list, *arg: Any, table: str = None, schema: str = None, alchemy: Alchemy = None, **kw: Any) -> None:
-        self.alchemy = alchemy
+    def __init__(self, columns: list, *arg: Any, table: str = None, schema: str = None, sql: Sql = None, **kw: Any) -> None:
+        self.sql = sql
         self.into = f"{schema or 'dbo'}.{table}"
         super().__init__(columns, *arg, **kw)
 
@@ -274,9 +274,9 @@ class SelectInto(alch.sql.Select, AlchemyBound, Expression):
 
     def execute(self, autocommit: bool = False) -> str:
         """Execute this query's statement in the current session."""
-        res = self.alchemy.session.execute(self)
+        res = self.sql.session.execute(self)
         if autocommit:
-            self.alchemy.session.commit()
+            self.sql.session.commit()
         return res
 
 

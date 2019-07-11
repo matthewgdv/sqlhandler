@@ -12,29 +12,29 @@ from pyodbc import ProgrammingError
 from subtypes import Frame, Str
 
 if TYPE_CHECKING:
-    from .alchemy import Alchemy
+    from .sql import Sql
     from .custom import Base
 
 
 SelfType = TypeVar("SelfType")
 
 
-class AlchemyBound:
-    def __init__(self, *args: Any, alchemy: Alchemy = None, **kwargs: Any) -> None:
-        self.alchemy = alchemy
+class SqlBoundMixin:
+    def __init__(self, *args: Any, sql: Sql = None, **kwargs: Any) -> None:
+        self.sql = sql
 
     @classmethod
-    def from_alchemy(cls: SelfType, alchemy: Alchemy) -> Callable[[...], SelfType]:
-        def wrapper(*args: Any, **kwargs: Any) -> AlchemyBound:
-            return cls(*args, alchemy=alchemy, **kwargs)
+    def from_sql(cls: SelfType, sql: Sql) -> Callable[[...], SelfType]:
+        def wrapper(*args: Any, **kwargs: Any) -> SqlBoundMixin:
+            return cls(*args, sql=sql, **kwargs)
         return wrapper
 
 
-class StoredProcedure(AlchemyBound):
-    def __init__(self, name: str, schema: str = "dbo", alchemy: Alchemy = None) -> None:
-        self.alchemy, self.name, self.schema = alchemy, name, schema
+class StoredProcedure(SqlBoundMixin):
+    def __init__(self, name: str, schema: str = "dbo", sql: Sql = None) -> None:
+        self.sql, self.name, self.schema = sql, name, schema
         self.exception, self.exceptions = None, []
-        self.cursor = self.alchemy.engine.raw_connection().cursor()
+        self.cursor = self.sql.engine.raw_connection().cursor()
         self.result: List[Frame] = None
         self.results: List[List[Frame]] = []
 
@@ -100,26 +100,26 @@ class StoredProcedure(AlchemyBound):
 class TempManager:
     """Context manager class for implementing temptables without using actual temptables (which sqlalchemy doesn't seem to be able to reflect)"""
 
-    def __init__(self, alchemy: Alchemy = None) -> None:
-        self.alchemy, self._table, self.name = alchemy, None, "__tmp__"
+    def __init__(self, sql: Sql = None) -> None:
+        self.sql, self._table, self.name = sql, None, "__tmp__"
 
     def __enter__(self) -> TempManager:
-        self.alchemy.refresh()
-        if self.name in self.alchemy.meta.tables:
-            self.alchemy.drop_table(self.name)
+        self.sql.refresh()
+        if self.name in self.sql.meta.tables:
+            self.sql.drop_table(self.name)
         return self
 
     def __exit__(self, exception_type: Any, exception_value: Any, traceback: Any) -> None:
-        self.alchemy.refresh()
-        if self.name in self.alchemy.meta.tables:
-            self.alchemy.drop_table(self.name)
+        self.sql.refresh()
+        if self.name in self.sql.meta.tables:
+            self.sql.drop_table(self.name)
 
     def __str__(self) -> str:
         return self.name
 
     def __call__(self) -> alch.Table:
         if self._table is None:
-            self._table = self.alchemy[self.name]
+            self._table = self.sql[self.name]
         return self._table
 
 

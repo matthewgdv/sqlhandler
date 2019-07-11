@@ -24,24 +24,24 @@ if TYPE_CHECKING:
     import alembic
 
 
-class Alchemy:
+class Sql:
     """
     Provides access to the complete sqlalchemy API, with custom functionality added for logging and pandas integration. Handles authentication through config settings and relects all schemas passed to the constructor.
-    The custom expression classes provided have additional useful methods and are modified by the 'autocommit' and 'printing' attributes (can be set at construction time) to facilitate human-supervised queries.
+    The custom expression classes provided have additional useful methods and are modified by the 'autocommit' attribute to facilitate human-supervised queries.
     The custom query class provided by the Alchemy object's 'session' attribute also has additional methods. Many commonly used sqlalchemy objects are bound to this object as attributes for easy access.
     """
 
     def __init__(self, host: str = None, database: str = None, log: File = None, autocommit: bool = False) -> None:
         self.engine = self._create_engine(host=host, database=database)
-        self.session = Session.from_alchemy(self)(self.engine)
+        self.session = Session.from_sql(self)(self.engine)
 
         self.database = DatabaseHandler(self)
 
         self.log, self.autocommit = log, autocommit
 
-        self.Select, self.SelectInto, self.Update = Select.from_alchemy(self), SelectInto.from_alchemy(self), Update.from_alchemy(self)
-        self.Insert, self.Delete = Insert.from_alchemy(self), Delete.from_alchemy(self)
-        self.StoredProcedure = StoredProcedure.from_alchemy(self)
+        self.Select, self.SelectInto, self.Update = Select.from_sql(self), SelectInto.from_sql(self), Update.from_sql(self)
+        self.Insert, self.Delete = Insert.from_sql(self), Delete.from_sql(self)
+        self.StoredProcedure = StoredProcedure.from_sql(self)
 
         self.text, self.literal, self.clone, self.alias = alch.text, alch.literal, clone, aliased
         self.AND, self.OR, self.CAST, self.CASE = alch.and_, alch.or_, alch.cast, alch.case
@@ -57,7 +57,7 @@ class Alchemy:
     def __len__(self) -> int:
         return len(self.database.meta.tables)
 
-    def __enter__(self) -> Alchemy:
+    def __enter__(self) -> Sql:
         self.session.rollback()
         return self
 
@@ -66,6 +66,10 @@ class Alchemy:
             self.session.commit()
         else:
             self.session.rollback()
+
+    @property
+    def Model(self) -> Base:
+        return self.database.declaration
 
     @property
     def orm(self) -> Set[str]:

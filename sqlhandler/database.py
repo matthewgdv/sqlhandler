@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 
 import sqlalchemy as alch
 from sqlalchemy.ext.automap import automap_base
@@ -14,13 +14,16 @@ from miscutils import NameSpace, Cache
 from sqlhandler import localres
 from .custom import Base
 
+if TYPE_CHECKING:
+    from .sql import Sql
+
 
 # TODO: Fix bug with declarative base occasionally getting collisions when dropping and recreating tables or clearing metadata
 
 
 class DatabaseHandler:
-    def __init__(self, alchemy) -> None:
-        self.alchemy, self.name, self.cache = alchemy, alchemy.engine.url.database, Cache(file=File.from_resource(localres, "sql_cache.pkl"), days=5)
+    def __init__(self, sql: Sql) -> None:
+        self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=File.from_resource(localres, "sql_cache.pkl"), days=5)
         self.meta = self._get_metadata()
         self.declaration = self.reflection = None  # type: Base
 
@@ -62,14 +65,14 @@ class DatabaseHandler:
             namespace._clear_namespace()
 
     def _refresh_bases(self) -> None:
-        self.declaration = declarative_base(bind=self.alchemy.engine, metadata=self.meta, cls=Base)
-        self.declaration.alchemy = self.alchemy
+        self.declaration = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=Base)
+        self.declaration.sql = self.sql
         self.reflection = automap_base(declarative_base=self.declaration)
         self.reflection.prepare(name_for_collection_relationship=self._pluralize_collection)
 
     def _get_metadata(self) -> None:
         meta = self.cache.setdefault(self.name, alch.MetaData())
-        meta.bind = self.alchemy.engine
+        meta.bind = self.sql.engine
         return meta
 
     def _normalize_table(self, table: Any, schema: str = None) -> alch.schema.Table:

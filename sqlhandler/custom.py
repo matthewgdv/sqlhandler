@@ -14,12 +14,12 @@ from subtypes import Frame
 from .utils import AlchemyBound, literalstatement
 
 if TYPE_CHECKING:
-    from .alchemy import Alchemy
+    from .sql import Sql
 
 
 class Base:
     """Custom base class for declarative and automap bases to inherit from."""
-    alchemy: Alchemy
+    sql: Sql
     __table__: alch.Table
     columns: ImmutableColumnCollection
 
@@ -47,25 +47,25 @@ class Base:
 
     @classmethod
     def all(cls) -> List[Base]:
-        return cls.alchemy.session.query(cls).all()
+        return cls.sql.session.query(cls).all()
 
     @classmethod
     def first(cls) -> Base:
-        return cls.alchemy.session.query(cls).first()
+        return cls.sql.session.query(cls).first()
 
     @classmethod
     def to_frame(cls) -> Frame:
-        return cls.alchemy.session.query(cls).frame()
+        return cls.sql.session.query(cls).frame()
 
     @classmethod
     def query(cls) -> Frame:
-        return cls.alchemy.session.query(cls)
+        return cls.sql.session.query(cls)
 
     def frame(self) -> Frame:
-        return self.alchemy.orm_to_frame(self)
+        return self.sql.orm_to_frame(self)
 
     def insert(self) -> Base:
-        self.alchemy.session.add(self)
+        self.sql.session.add(self)
         return self
 
     def update(self, argdeltas: dict = None, **update_kwargs: Any,) -> Base:
@@ -79,20 +79,20 @@ class Base:
         return self
 
     def delete(self) -> Base:
-        self.alchemy.session.delete(self)
+        self.sql.session.delete(self)
         return self
 
 
 class Session(alch.orm.Session, AlchemyBound):
     """Custom subclass of sqlalchemy.orm.Session granting access to a custom Query class through the '.query()' method."""
 
-    def __init__(self, *args: Any, alchemy: Alchemy = None, **kwargs: Any) -> None:
-        self.alchemy = alchemy
+    def __init__(self, *args: Any, sql: Sql = None, **kwargs: Any) -> None:
+        self.sql = sql
         super().__init__(*args, **kwargs)
 
     def query(self, *args: Any) -> Query:
         """Return a custom subclass of sqlalchemy.orm.Query with additional useful methods and aliases for existing methods."""
-        return Query(*args, alchemy=self.alchemy)
+        return Query(*args, sql=self.sql)
 
     def execute(self, *args: Any, autocommit: bool = False, **kwargs: Any) -> alch.engine.ResultProxy:
         res = super().execute(*args, **kwargs)
@@ -104,10 +104,10 @@ class Session(alch.orm.Session, AlchemyBound):
 class Query(alch.orm.Query):
     """Custom subclass of sqlalchemy.orm.Query with additional useful methods and aliases for existing methods."""
 
-    def __init__(self, *args: Any, alchemy: Alchemy = None) -> None:
-        self.alchemy = alchemy
+    def __init__(self, *args: Any, sql: Sql = None) -> None:
+        self.sql = sql
         aslist = args[0] if len(args) == 1 and isinstance(args[0], list) else [*args]
-        super().__init__(aslist, session=self.alchemy.session)
+        super().__init__(aslist, session=self.sql.session)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(\n{(str(self))}\n)"
@@ -117,7 +117,7 @@ class Query(alch.orm.Query):
 
     def frame(self, *args: Any, **kwargs: Any) -> pd.DataFrame:
         """Execute the query and return the result as a pandas DataFrame."""
-        return self.alchemy.query_to_frame(self, *args, **kwargs)
+        return self.sql.query_to_frame(self, *args, **kwargs)
 
     def scalar_col(self) -> list:
         """Transpose all records in a single column into a list. If the query returns more than one column, this will raise a RuntimeError."""
