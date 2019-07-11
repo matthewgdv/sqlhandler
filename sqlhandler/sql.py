@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from typing import Any, Set, Dict, TYPE_CHECKING
+from typing import Any, Set, Dict, Union, TYPE_CHECKING
 
 
 import numpy as np
@@ -101,16 +101,13 @@ class Sql:
 
     # Conversion Methods
 
-    def query_to_frame(self, query: Query, labels: bool = False, print_ascii: bool = False) -> Frame:
+    def query_to_frame(self, query: Query, labels: bool = False) -> Frame:
         """Convert sqlalchemy.orm.Query object to a pandas DataFrame. Optionally apply table labels to columns and/or print an ascii representation of the DataFrame."""
         query = query.with_labels() if labels else query
 
         result = self.session.execute(query.statement)
         cols = [col[0] for col in result.cursor.description]
         frame = Frame(result.fetchall(), columns=cols)
-
-        if print_ascii:
-            print(frame.to_ascii())
 
         return frame
 
@@ -122,12 +119,12 @@ class Sql:
         """Reads the target table or view (from the specified schema) into a pandas DataFrame."""
         return Frame(pd.read_sql_table(table, self.engine, schema=schema))
 
-    def excel_to_table(self, filepath: os.PathLike, tablename: str = "temp", schema: str = None, if_exists: str = "fail") -> Base:
-        """Bulk insert the contents of the target '.xlsx' file to the specified table. The table is created with Primary Key 'id' field. Options for 'if_exists' are 'fail' (default), 'append', and 'replace'."""
-        return self.frame_to_table(self.excel_to_frame(os.fspath(filepath)), table=tablename, schema=schema, if_exists=if_exists)
+    def excel_to_table(self, filepath: os.PathLike, table: str = "temp", schema: str = None, if_exists: str = "fail", primary_key: str = "id", identity: bool = True, **kwargs: Any) -> Base:
+        """Bulk insert the contents of the target '.xlsx' file to the specified table."""
+        return self.frame_to_table(dataframe=Frame.from_excel(filepath, **kwargs), table=table, schema=schema, if_exists=if_exists, primary_key=primary_key, identity=identity)
 
     def frame_to_table(self, dataframe: pd.DataFrame, table: str, schema: str = None, if_exists: str = "fail", primary_key: str = "id", identity: bool = True) -> Base:
-        """Bulk insert the contents of a pandas DataFrame to the specified table. The table is created with a Primary Key 'id' field. Options for 'if_exists' are 'fail' (default), 'append', and 'replace'."""
+        """Bulk insert the contents of a pandas DataFrame to the specified table."""
         if primary_key is not None:
             if identity:
                 dataframe.reset_index(inplace=True, drop=True)
@@ -161,17 +158,16 @@ class Sql:
 
         return Frame(vals, columns=cols)
 
-    @staticmethod
-    def excel_to_frame(filepath: os.PathLike, sanitize_colnames: bool = True, **kwargs: Any) -> Frame:
-        """Reads in the specified Excel spreadsheet into a pandas DataFrame. Passes on arguments to the pandas read_excel function. Optionally snake_cases column names and strips out non-ascii characters."""
-        return Frame.from_excel(os.fspath(filepath), sanitize_colnames=sanitize_colnames, **kwargs)
+    def create_table(self, table: Union[Base, alch.schema.Table]) -> None:
+        """Drop a table or the table belonging to an ORM class and remove it from the metadata."""
+        self.database.create_table(table)
 
-    def refresh_table(self, table: alch.schema.Table, schema: str = None) -> None:
-        self.database.refresh_table(table=table, schema=schema)
-
-    def drop_table(self, table: alch.schema.Table) -> None:
+    def drop_table(self, table: Union[Base, alch.schema.Table]) -> None:
         """Drop a table or the table belonging to an ORM class and remove it from the metadata."""
         self.database.drop_table(table)
+
+    def refresh_table(self, table: Union[Base, alch.schema.Table]) -> None:
+        self.database.refresh_table(table=table)
 
     def clear_metadata(self) -> None:
         self.database.clear()

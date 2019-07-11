@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING
+from typing import Any, Union, TYPE_CHECKING
 
 import sqlalchemy as alch
 from sqlalchemy.ext.automap import automap_base
@@ -43,20 +43,23 @@ class DatabaseHandler:
 
         self.cache[self.name] = self.meta
 
-    def refresh_table(self, table: alch.schema.Table, schema: str = None) -> None:
-        table = self._normalize_table(table=table, schema=schema)
-        if table is not None:
-            self.drop_table(table)
-        self.reflect(Maybe(table).schema.else_(schema))
+    def create_table(self, table: alch.schema.Table) -> None:
+        table = self._normalize_table(table)
+        table.create()
+        self.reflect(table.schema)
 
-    def drop_table(self, table: alch.schema.Table, schema: str = None) -> None:
-        table = self._normalize_table(table=table, schema=schema)
+    def drop_table(self, table: alch.schema.Table) -> None:
+        table = self._normalize_table(table)
         table.drop()
         self.meta.remove(table)
 
-        name, schema = table.name, table.schema
-        del self.orm[schema][name]
-        del self.objects[schema][name]
+        del self.orm[table.schema][table.name]
+        del self.objects[table.schema][table.name]
+
+    def refresh_table(self, table: alch.schema.Table) -> None:
+        table = self._normalize_table(table)
+        self.drop_table(table)
+        self.reflect(table.schema)
 
     def clear(self) -> None:
         self.meta.clear()
@@ -75,12 +78,9 @@ class DatabaseHandler:
         meta.bind = self.sql.engine
         return meta
 
-    def _normalize_table(self, table: Any, schema: str = None) -> alch.schema.Table:
+    def _normalize_table(self, table: Union[Base, alch.schema.Table]) -> alch.schema.Table:
         if hasattr(table, "__table__"):
             table = table.__table__
-        elif isinstance(table, str):
-            table = self.meta.tables.get(f"{(Maybe(schema) + '.').else_('')}{table}")
-
         return table
 
     @staticmethod

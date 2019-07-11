@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, List, Union, TYPE_CHECKING
+from typing import Any, Union, TYPE_CHECKING
 
 import pandas as pd
 import sqlalchemy as alch
@@ -35,31 +35,20 @@ class Base:
         return cls.__table__.join(*args, **kwargs)
 
     @classmethod
-    def joins(cls, *args: Any) -> alch.Table:
-        table = cls.__table__
-        for join in args:
-            table = table.join(join)
-        return table
-
-    @classmethod
     def c(cls, colname: str = None) -> Union[ImmutableColumnCollection, alch.Column]:
         return cls.__table__.c if colname is None else cls.__table__.c[colname]
 
     @classmethod
-    def all(cls) -> List[Base]:
-        return cls.sql.session.query(cls).all()
-
-    @classmethod
-    def first(cls) -> Base:
-        return cls.sql.session.query(cls).first()
-
-    @classmethod
-    def to_frame(cls) -> Frame:
-        return cls.sql.session.query(cls).frame()
-
-    @classmethod
     def query(cls) -> Frame:
         return cls.sql.session.query(cls)
+
+    @classmethod
+    def create(cls) -> Frame:
+        return cls.sql.create_table(cls)
+
+    @classmethod
+    def drop(cls) -> Frame:
+        return cls.sql.drop_table(cls)
 
     def frame(self) -> Frame:
         return self.sql.orm_to_frame(self)
