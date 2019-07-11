@@ -11,7 +11,7 @@ from sqlalchemy.dialects.mssql import BIT
 from maybe import Maybe
 from subtypes import Frame
 
-from .utils import AlchemyBound, literalstatement
+from .utils import SqlBoundMixin, literalstatement
 
 if TYPE_CHECKING:
     from .sql import Sql
@@ -39,16 +39,16 @@ class Base:
         return cls.__table__.c if colname is None else cls.__table__.c[colname]
 
     @classmethod
-    def query(cls) -> Frame:
+    def query(cls) -> Query:
         return cls.sql.session.query(cls)
 
     @classmethod
-    def create(cls) -> Frame:
-        return cls.sql.create_table(cls)
+    def create(cls) -> None:
+        cls.sql.create_table(cls)
 
     @classmethod
-    def drop(cls) -> Frame:
-        return cls.sql.drop_table(cls)
+    def drop(cls) -> None:
+        cls.sql.drop_table(cls)
 
     def frame(self) -> Frame:
         return self.sql.orm_to_frame(self)
@@ -72,7 +72,7 @@ class Base:
         return self
 
 
-class Session(alch.orm.Session, AlchemyBound):
+class Session(alch.orm.Session, SqlBoundMixin):
     """Custom subclass of sqlalchemy.orm.Session granting access to a custom Query class through the '.query()' method."""
 
     def __init__(self, *args: Any, sql: Sql = None, **kwargs: Any) -> None:

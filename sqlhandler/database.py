@@ -132,7 +132,7 @@ class Schema(NameSpace):
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name={repr(self._name)}, num_tables={len(self)}, tables={[table for table in self._namespace]})"
 
-    def __getattr__(self, attr: str) -> Schema:
+    def __getattr__(self, attr: str) -> Base:
         if not attr.startswith("_"):
             self._handler.reflect(self._name)
 
