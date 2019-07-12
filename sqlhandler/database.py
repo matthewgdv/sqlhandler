@@ -21,18 +21,18 @@ if TYPE_CHECKING:
 # TODO: Fix bug with declarative base occasionally getting collisions when dropping and recreating tables or clearing metadata
 
 
-class DatabaseHandler:
+class Database:
     def __init__(self, sql: Sql) -> None:
         self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=File.from_resource(localres, "sql_cache.pkl"), days=5)
         self.meta = self._get_metadata()
         self.declaration = self.reflection = None  # type: Base
 
         self._refresh_bases()
-        self.orm, self.objects = Database(handler=self, tables=list(self.reflection.classes)), Database(handler=self, tables=[self.meta.tables[item] for item in self.meta.tables])
+        self.orm, self.objects = Schemas(database=self, tables=list(self.reflection.classes)), Schemas(database=self, tables=[self.meta.tables[item] for item in self.meta.tables])
         self.reflect()
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
+        return f"{type(self).__name__}(name={repr(self.name)}, orm={repr(self.orm)}, objects={repr(self.objects)}, cache={repr(self.cache)})"
 
     def reflect(self, schema: str = None) -> None:
         self.meta.reflect(schema=schema, views=True)
@@ -89,14 +89,14 @@ class DatabaseHandler:
         return str(Str(referred_name).snake_case().plural())
 
 
-class Database(NameSpace):
-    def __init__(self, handler: DatabaseHandler, tables: list) -> None:
+class Schemas(NameSpace):
+    def __init__(self, database: Database, tables: list) -> None:
         super().__init__()
-        self._handler, self._name = handler, handler.name
+        self._database = database
         self._set_schemas_from_tables(tables=tables)
 
     def __repr__(self) -> str:
-        return f"""{type(self).__name__}(name={repr(self._name)}, num_tables={sum([len(schema) for schema in self._namespace])}, num_schemas={len(self)}, schemas=[{", ".join([f"{type(schema).__name__}(name='{schema._name}', tables={len(schema)})" for name, schema in self._namespace.items()])}])"""
+        return f"""{type(self).__name__}(num_schemas={len(self)}, schemas=[{", ".join([f"{type(schema).__name__}(name='{schema._name}', tables={len(schema)})" for name, schema in self._namespace.items()])}])"""
 
     def __getitem__(self, name: str) -> Schema:
         if name is None:
@@ -106,7 +106,7 @@ class Database(NameSpace):
 
     def __getattr__(self, attr: str) -> Schema:
         if not attr.startswith("_"):
-            self._handler.reflect(attr)
+            self._database.reflect(attr)
 
         return super().__getattribute__(attr)
 
@@ -121,19 +121,19 @@ class Database(NameSpace):
 
     def _add_schema(self, name: str, tables: list) -> None:
         name = Maybe(name).else_("dbo")
-        self[name] = Schema(handler=self._handler, name=name, tables=tables)
+        self[name] = Schema(database=self._database, name=name, tables=tables)
 
 
 class Schema(NameSpace):
-    def __init__(self, handler: DatabaseHandler, name: str, tables: list) -> None:
+    def __init__(self, database: Database, name: str, tables: list) -> None:
         super().__init__(mappings={Maybe(table).__table__.else_(table).name: table for table in tables})
-        self._handler, self._name = handler, name
+        self._database, self._name = database, name
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name={repr(self._name)}, num_tables={len(self)}, tables={[table for table in self._namespace]})"
 
     def __getattr__(self, attr: str) -> Base:
         if not attr.startswith("_"):
-            self._handler.reflect(self._name)
+            self._database.reflect(self._name)
 
         return super().__getattribute__(attr)

@@ -12,12 +12,13 @@ from sqlalchemy.orm import aliased, backref, relationship
 
 from subtypes import Frame
 from pathmagic import File
+from miscutils.serializer import LostObject
 
 from .custom import Base, Query, Session, StringLiteral, BitLiteral
 from .expression import Select, Update, Insert, Delete, SelectInto
 from .utils import StoredProcedure, clone
 from .log import SqlLog
-from .database import DatabaseHandler
+from .database import Database
 from .config import Config
 
 if TYPE_CHECKING:
@@ -35,7 +36,7 @@ class Sql:
         self.engine = self._create_engine(host=host, database=database)
         self.session = Session.from_sql(self)(self.engine)
 
-        self.database = DatabaseHandler(self)
+        self.database = Database(self)
 
         self.log, self.autocommit = log, autocommit
 
@@ -52,7 +53,7 @@ class Sql:
         pd.set_option("max_columns", None)
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(engine={repr(self.engine)}, num_tables={len(self)})"
+        return f"{type(self).__name__}(engine={repr(self.engine)}, database={repr(self.database)})"
 
     def __len__(self) -> int:
         return len(self.database.meta.tables)
@@ -66,6 +67,12 @@ class Sql:
             self.session.commit()
         else:
             self.session.rollback()
+
+    def __getstate__(self) -> dict:
+        return {"engine": LostObject(self.engine), "database": LostObject(self.database), "autocommit": self.autocommit, "_log": self.log}
+
+    def __setstate__(self, attrs) -> None:
+        self.__dict__ = attrs
 
     @property
     def Model(self) -> Base:
