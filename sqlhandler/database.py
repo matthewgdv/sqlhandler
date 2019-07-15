@@ -79,9 +79,7 @@ class Database:
         return meta
 
     def _normalize_table(self, table: Union[Base, alch.schema.Table]) -> alch.schema.Table:
-        if hasattr(table, "__table__"):
-            table = table.__table__
-        return table
+        return Maybe(table).__table__.else_(table)
 
     @staticmethod
     def _pluralize_collection(base: Any, local_cls: Any, referred_cls: Any, constraint: Any) -> str:
