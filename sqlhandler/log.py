@@ -7,17 +7,18 @@ from miscutils import PrintLog
 
 class SqlLog(PrintLog):
     def __enter__(self, *args, **kwargs) -> PrintLog:
-        self.activate()
-        return self
+        if self._path is not None:
+            self.activate()
+            return self
 
     def __exit__(self, ex_type: Any, ex_value: Any, ex_traceback: Any) -> None:
         self.deactivate()
 
     def deactivate(self, openfile: bool = True) -> None:
-        super().deactivate()
-
-        if openfile:
-            self.open()
+        if self.active:
+            super().deactivate()
+            if openfile:
+                self.open()
 
     def write_comment(self, text: str, single_line_comment_cutoff: int = 5, add_newlines: int = 2) -> None:
         if not self.active or self.to_console:
