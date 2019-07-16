@@ -54,10 +54,11 @@ class StoredProcedure(SqlBoundMixin):
             raise ex
         else:
             if not self._tran_is_resolved:
-                if self.exception is None:
+                if self:
                     self.commit()
                 else:
                     self.rollback()
+                    raise self.exception
 
     def execute(self, *args: Any, **kwargs: Any) -> Frame:
         result = None
