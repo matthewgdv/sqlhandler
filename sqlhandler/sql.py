@@ -34,7 +34,7 @@ class Sql:
 
     def __init__(self, host: str = None, database: str = None, log: File = None, autocommit: bool = False) -> None:
         self.engine = self._create_engine(host=host, database=database)
-        self.session = Session.from_sql(self)(self.engine)
+        self.session = Session(self.engine, sql=self)
 
         self.database = Database(self)
 

@@ -11,7 +11,7 @@ from sqlalchemy.dialects.mssql import BIT
 from maybe import Maybe
 from subtypes import Frame
 
-from .utils import SqlBoundMixin, literalstatement
+from .utils import literalstatement
 
 if TYPE_CHECKING:
     from .sql import Sql
@@ -58,10 +58,18 @@ class Base:
         return self
 
     def update(self, argdeltas: dict = None, **update_kwargs: Any,) -> Base:
+        def ensure_names_are_valid(argnames: list) -> None:
+            valid_names = set(vars(type(self)))
+            for name in argnames:
+                if name not in valid_names:
+                    raise AttributeError(f"Cannot perform update, '{type(self).__name__}' object has no attribute: '{name}'.")
+
         if argdeltas is not None:
+            ensure_names_are_valid(argdeltas)
             for key, val in argdeltas.items():
                 setattr(self, Maybe(key).key.else_(key), val)
         else:
+            ensure_names_are_valid(update_kwargs)
             for key, val in update_kwargs.items():
                 setattr(self, key, val)
 
@@ -72,7 +80,7 @@ class Base:
         return self
 
 
-class Session(alch.orm.Session, SqlBoundMixin):
+class Session(alch.orm.Session):
     """Custom subclass of sqlalchemy.orm.Session granting access to a custom Query class through the '.query()' method."""
 
     def __init__(self, *args: Any, sql: Sql = None, **kwargs: Any) -> None:
