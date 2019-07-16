@@ -46,16 +46,18 @@ class StoredProcedure(SqlBoundMixin):
 
     @contextlib.contextmanager
     def transaction(self) -> StoredProcedure:
+        self._tran_is_resolved = False
         try:
             yield self
         except Exception as ex:
             self.rollback()
             raise ex
         else:
-            if self.exception is None:
-                self.commit()
-            else:
-                self.rollback()
+            if not self._tran_is_resolved:
+                if self.exception is None:
+                    self.commit()
+                else:
+                    self.rollback()
 
     def execute(self, *args: Any, **kwargs: Any) -> Frame:
         result = None
@@ -81,6 +83,8 @@ class StoredProcedure(SqlBoundMixin):
 
         self.exceptions.append(self.exception)
         self.exception = None
+
+        self._tran_is_resolved = True
 
     @staticmethod
     def _get_frames_from_result(result: Any) -> List[Frame]:

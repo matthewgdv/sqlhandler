@@ -51,14 +51,18 @@ class Database:
     def drop_table(self, table: alch.schema.Table) -> None:
         table = self._normalize_table(table)
         table.drop()
-        self.meta.remove(table)
 
+        self.meta.remove(table)
         del self.orm[table.schema][table.name]
         del self.objects[table.schema][table.name]
 
     def refresh_table(self, table: alch.schema.Table) -> None:
         table = self._normalize_table(table)
-        self.drop_table(table)
+
+        self.meta.remove(table)
+        del self.orm[table.schema][table.name]
+        del self.objects[table.schema][table.name]
+
         self.reflect(table.schema)
 
     def clear(self) -> None:
@@ -94,7 +98,7 @@ class Schemas(NameSpace):
         self._set_schemas_from_tables(tables=tables)
 
     def __repr__(self) -> str:
-        return f"""{type(self).__name__}(num_schemas={len(self)}, schemas=[{", ".join([f"{type(schema).__name__}(name='{schema._name}', tables={len(schema)})" for name, schema in self._namespace.items()])}])"""
+        return f"""{type(self).__name__}(num_schemas={len(self)}, schemas=[{", ".join([f"{type(schema).__name__}(name='{schema._name}', tables={len(schema)})" for name, schema in self])}])"""
 
     def __getitem__(self, name: str) -> Schema:
         if name is None:
@@ -128,7 +132,7 @@ class Schema(NameSpace):
         self._database, self._name = database, name
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(name={repr(self._name)}, num_tables={len(self)}, tables={[table for table in self._namespace]})"
+        return f"{type(self).__name__}(name={repr(self._name)}, num_tables={len(self)}, tables={[table for table, _ in self]})"
 
     def __getattr__(self, attr: str) -> Base:
         if not attr.startswith("_"):

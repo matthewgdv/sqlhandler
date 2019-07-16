@@ -148,7 +148,8 @@ class Sql:
 
         dataframe.infer_dtypes().to_sql(engine=self.engine, name=table, if_exists=if_exists, index=False, index_label=None, primary_key=primary_key, schema=schema, dtype=dtypes)
 
-        self.refresh_table(table=table, schema=schema)
+        table_object = self.orm[schema][table]
+        self.refresh_table(table=table_object)
         return self.orm[schema][table]
 
     @staticmethod
