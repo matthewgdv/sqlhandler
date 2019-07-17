@@ -19,8 +19,6 @@ if TYPE_CHECKING:
     from .sql import Sql
 
 
-# TODO: Fix bug with declarative base occasionally getting collisions when dropping and recreating tables or clearing metadata
-
 
 class Database:
     def __init__(self, sql: Sql) -> None:
@@ -37,10 +35,12 @@ class Database:
         return f"{type(self).__name__}(name={repr(self.name)}, orm={repr(self.orm)}, objects={repr(self.objects)}, cache={repr(self.cache)})"
 
     def reflect(self, schema: str = None) -> None:
+        num_tables_before = len(self.meta.tables)
         self.meta.reflect(schema=schema, views=True)
-        self._refresh_declarative_base()
-        self._add_schema_to_namespaces(schema)
-        self.cache[self.name] = self.meta
+        if len(self.meta.tables) > num_tables_before:
+            self._refresh_declarative_base()
+            self._add_schema_to_namespaces(schema)
+            self.cache[self.name] = self.meta
 
     def create_table(self, table: alch.schema.Table) -> None:
         table = self._normalize_table(table)
@@ -54,6 +54,8 @@ class Database:
         self.meta.remove(table)
         del self.orm[table.schema][table.name]
         del self.objects[table.schema][table.name]
+
+        self.cache[self.name] = self.meta
 
     def refresh_table(self, table: alch.schema.Table) -> None:
         table = self._normalize_table(table)
@@ -81,7 +83,7 @@ class Database:
             new_meta.remove(new_meta.tables[table])
 
         declaration = declarative_base(bind=self.sql.engine, metadata=new_meta, cls=Base)
-        self.declaration.sql = self.sql
+        declaration.sql = self.sql
 
         automap = automap_base(declarative_base=declaration)
         automap.prepare(name_for_collection_relationship=self._pluralize_collection)
@@ -121,7 +123,10 @@ class Schemas(NameSpaceObject):
         if not attr.startswith("_"):
             self._database.reflect(attr)
 
-        return super().__getattribute__(attr)
+        try:
+            return super().__getattribute__(attr)
+        except AttributeError:
+            raise AttributeError(f"{type(self._database).__name__} '{self._database.name}' has no schema '{attr}'.")
 
     def _add_schema(self, name: str, tables: list) -> None:
         name = Maybe(name).else_("dbo")
@@ -140,4 +145,7 @@ class Schema(NameSpaceObject):
         if not attr.startswith("_"):
             self._database.reflect(self._name)
 
-        return super().__getattribute__(attr)
+        try:
+            return super().__getattribute__(attr)
+        except AttributeError:
+            raise AttributeError(f"{type(self).__name__} '{self._name}' of {type(self._database).__name__} '{self._database.name}' has no object '{attr}'.")
