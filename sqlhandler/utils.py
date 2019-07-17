@@ -3,6 +3,7 @@ from __future__ import annotations
 import contextlib
 from typing import Any, List, Callable, TypeVar, TYPE_CHECKING
 
+from abc import ABC, abstractmethod
 import sqlalchemy as alch
 import sqlalchemy.sql.sqltypes
 import sqlparse
@@ -10,6 +11,7 @@ from sqlalchemy.orm import Query, make_transient
 from pyodbc import ProgrammingError
 
 from subtypes import Frame, Str
+from pathmagic import File, PathLike
 
 if TYPE_CHECKING:
     from .sql import Sql
@@ -30,11 +32,12 @@ class SqlBoundMixin:
         return wrapper
 
 
-class StoredProcedure(SqlBoundMixin):
-    def __init__(self, name: str, schema: str = "dbo", sql: Sql = None) -> None:
-        self.sql, self.name, self.schema = sql, name, schema
-        self.exception, self.exceptions = None, []
+class Executable(SqlBoundMixin, ABC):
+    def __init__(self, sql: Sql = None) -> None:
+        self.sql = sql
         self.cursor = self.sql.engine.raw_connection().cursor()
+        self.exception: Exception = None
+        self.exceptions: List[Exception] = []
         self.result: List[Frame] = None
         self.results: List[List[Frame]] = []
 
@@ -63,7 +66,8 @@ class StoredProcedure(SqlBoundMixin):
     def execute(self, *args: Any, **kwargs: Any) -> Frame:
         result = None
         try:
-            result = self.cursor.execute(f"EXEC {self.schema}.{self.name} {', '.join(list('?'*len(args)) + [f'@{arg}=?' for arg in kwargs.keys()])};", *[*args, *list(kwargs.values())])
+            statement, sql_args = self._compile_sql(*args, **kwargs)
+            result = self.cursor.execute(statement, *sql_args)
         except ProgrammingError as ex:
             self.exception = ex
 
@@ -87,6 +91,10 @@ class StoredProcedure(SqlBoundMixin):
 
         self._tran_is_resolved = True
 
+    @abstractmethod
+    def _compile_sql(self, *args: Any, **kwargs: Any) -> None:
+        pass
+
     @staticmethod
     def _get_frames_from_result(result: Any) -> List[Frame]:
         def get_frame_from_result(result: Any) -> Frame:
@@ -100,6 +108,24 @@ class StoredProcedure(SqlBoundMixin):
             data.append(get_frame_from_result(result))
 
         return [frame for frame in data if frame is not None]
+
+
+class StoredProcedure(Executable):
+    def __init__(self, name: str, schema: str = "dbo", sql: Sql = None) -> None:
+        super().__init__(sql=sql)
+        self.name, self.schema = name, schema
+
+    def _compile_sql(self, *args: Any, **kwargs: Any) -> Frame:
+        return (f"EXEC {self.schema}.{self.name} {', '.join(list('?'*len(args)) + [f'@{arg}=?' for arg in kwargs.keys()])};", [*args, *list(kwargs.values())])
+
+
+class Script(Executable):
+    def __init__(self, path: PathLike, sql: Sql = None) -> None:
+        super().__init__(sql=sql)
+        self.file = File.from_pathlike(path)
+
+    def _compile_sql(self, *args: Any, **kwargs: Any) -> Frame:
+        return (self.file.contents, [])
 
 
 class TempManager:
