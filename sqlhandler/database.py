@@ -4,7 +4,7 @@ from typing import Any, Union, TYPE_CHECKING
 import copy
 
 import sqlalchemy as alch
-from sqlalchemy.ext.automap import automap_base, AutomapBase
+from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.ext.declarative import declarative_base
 
 from maybe import Maybe
