@@ -16,7 +16,7 @@ from miscutils.serializer import LostObject
 
 from .custom import Base, Query, Session, StringLiteral, BitLiteral
 from .expression import Select, Update, Insert, Delete, SelectInto
-from .utils import StoredProcedure, clone
+from .utils import StoredProcedure, Script, clone
 from .log import SqlLog
 from .database import Database
 from .config import Config
@@ -42,7 +42,7 @@ class Sql:
 
         self.Select, self.SelectInto, self.Update = Select.from_sql(self), SelectInto.from_sql(self), Update.from_sql(self)
         self.Insert, self.Delete = Insert.from_sql(self), Delete.from_sql(self)
-        self.StoredProcedure = StoredProcedure.from_sql(self)
+        self.StoredProcedure, self.Script = StoredProcedure.from_sql(self), Script.from_sql(self)
 
         self.text, self.literal, self.clone, self.alias = alch.text, alch.literal, clone, aliased
         self.AND, self.OR, self.CAST, self.CASE = alch.and_, alch.or_, alch.cast, alch.case

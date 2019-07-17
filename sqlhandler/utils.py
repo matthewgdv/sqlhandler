@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import contextlib
 from typing import Any, List, Callable, TypeVar, TYPE_CHECKING
 
 from abc import ABC, abstractmethod
@@ -36,32 +35,37 @@ class Executable(SqlBoundMixin, ABC):
     def __init__(self, sql: Sql = None) -> None:
         self.sql = sql
         self.cursor = self.sql.engine.raw_connection().cursor()
+        self.args, self.kwargs = (), {}
+
         self.exception: Exception = None
         self.exceptions: List[Exception] = []
         self.result: List[Frame] = None
         self.results: List[List[Frame]] = []
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        return self.execute(*args, **kwargs)
+        self.args, self.kwargs = args, self.kwargs
+        return self
 
     def __bool__(self) -> bool:
         return self.exception is None
 
-    @contextlib.contextmanager
-    def transaction(self) -> StoredProcedure:
-        self._tran_is_resolved = False
-        try:
-            yield self
-        except Exception as ex:
+    def __enter__(self) -> Executable:
+        self.execute(*self.args, **self.kwargs)
+        return self
+
+    def __exit__(self, ex_type: Any, ex_value: Any, ex_traceback: Any) -> None:
+        if ex_type is not None:
             self.rollback()
-            raise ex
         else:
-            if not self._tran_is_resolved:
+            if self._trancount() > 0:
                 if self:
                     self.commit()
                 else:
                     self.rollback()
                     raise self.exception
+            else:
+                if self.result is not None or self.exception is not None:
+                    self._archive_results_and_exceptions()
 
     def execute(self, *args: Any, **kwargs: Any) -> Frame:
         result = None
@@ -72,15 +76,23 @@ class Executable(SqlBoundMixin, ABC):
             self.exception = ex
 
         self.result = self._get_frames_from_result(result) if result is not None else None
-        return self
+        return self.result
 
     def commit(self) -> None:
-        self.cursor.commit()
+        while self._trancount() > 0:
+            self.cursor.commit()
+
         self._archive_results_and_exceptions()
 
     def rollback(self) -> None:
-        self.cursor.rollback()
+        while self._trancount() > 0:
+            self.cursor.rollback()
+
         self._archive_results_and_exceptions()
+
+    def _reset_transactional_state(self) -> None:
+        while self._trancount() > 0:
+            self.cursor.rollback()
 
     def _archive_results_and_exceptions(self) -> None:
         self.results.append(self.result)
@@ -89,11 +101,12 @@ class Executable(SqlBoundMixin, ABC):
         self.exceptions.append(self.exception)
         self.exception = None
 
-        self._tran_is_resolved = True
-
     @abstractmethod
     def _compile_sql(self, *args: Any, **kwargs: Any) -> None:
         pass
+
+    def _trancount(self) -> int:
+        return self.cursor.execute("SELECT @@TRANCOUNT").fetchall()[0][0]
 
     @staticmethod
     def _get_frames_from_result(result: Any) -> List[Frame]:
