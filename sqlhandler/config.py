@@ -16,10 +16,10 @@ class Config:
 
     def __init__(self, path: PathLike = None) -> None:
         self.resources = File.from_resource(package=localres, name="config", extension="json") if path is None else File.from_pathlike(path)
-        self.data = Maybe(self.resources.contents).else_(NameSpace(default_host=None, hosts={}))
+        self.data: NameSpace = Maybe(self.resources.contents).else_(NameSpace(default_host=None, hosts={}))
 
     def __repr__(self) -> str:
-        return repr(self.data)
+        return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
 
     def add_host(self, host: str, drivername: str, default_database: str, username: str = None, password: str = None, port: str = None, query: dict = None, is_default: bool = False) -> None:
         self.data.hosts[host] = NameSpace(drivername=drivername, default_database=default_database, username=username, password=password, port=port, query=query)
