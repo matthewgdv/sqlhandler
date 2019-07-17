@@ -1,9 +1,10 @@
 from __future__ import annotations
 
 from typing import Any, Union, TYPE_CHECKING
+import copy
 
 import sqlalchemy as alch
-from sqlalchemy.ext.automap import automap_base
+from sqlalchemy.ext.automap import automap_base, AutomapBase
 from sqlalchemy.ext.declarative import declarative_base
 
 from maybe import Maybe
@@ -23,24 +24,22 @@ if TYPE_CHECKING:
 
 class Database:
     def __init__(self, sql: Sql) -> None:
-        self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=File.from_resource(localres, "sql_cache.pkl"), days=5)
+        self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=File.from_resource(localres, "sql_cache", "pkl"), days=5)
         self.meta = self._get_metadata()
         self.declaration = self.reflection = None  # type: Base
+        self.orm, self.objects = Schemas(database=self), Schemas(database=self)
 
-        self._refresh_bases()
-        self.orm, self.objects = Schemas(database=self, tables=list(self.reflection.classes)), Schemas(database=self, tables=[self.meta.tables[item] for item in self.meta.tables])
-        self.reflect()
+        self._refresh_declarative_base()
+        for schema in {self.meta.tables[table].schema for table in self.meta.tables}:
+            self._add_schema_to_namespaces(schema)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name={repr(self.name)}, orm={repr(self.orm)}, objects={repr(self.objects)}, cache={repr(self.cache)})"
 
     def reflect(self, schema: str = None) -> None:
         self.meta.reflect(schema=schema, views=True)
-
-        self._refresh_bases()
-        self.objects._add_schema(name=schema, tables=[table for table in [self.meta.tables[item] for item in self.meta.tables] if Maybe(table.schema).lower().else_(None) == Maybe(schema).lower().else_(None)])
-        self.orm._add_schema(name=schema, tables=[table for table in self.reflection.classes if Maybe(table.__table__.schema).lower().else_(None) == Maybe(schema).lower().else_(None)])
-
+        self._refresh_declarative_base()
+        self._add_schema_to_namespaces(schema)
         self.cache[self.name] = self.meta
 
     def create_table(self, table: alch.schema.Table) -> None:
@@ -71,11 +70,24 @@ class Database:
         for namespace in (self.orm, self.objects):
             namespace._clear()
 
-    def _refresh_bases(self) -> None:
+    def _refresh_declarative_base(self) -> None:
         self.declaration = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=Base)
         self.declaration.sql = self.sql
-        self.reflection = automap_base(declarative_base=self.declaration)
-        self.reflection.prepare(name_for_collection_relationship=self._pluralize_collection)
+
+    def _add_schema_to_namespaces(self, schema: str) -> None:
+        new_meta = copy.deepcopy(self.meta)
+        invalid_tables = {table for table in new_meta.tables if not Maybe(new_meta.tables[table].schema).lower().else_(None) == Maybe(schema).lower().else_(None)}
+        for table in invalid_tables:
+            new_meta.remove(new_meta.tables[table])
+
+        declaration = declarative_base(bind=self.sql.engine, metadata=new_meta, cls=Base)
+        self.declaration.sql = self.sql
+
+        automap = automap_base(declarative_base=declaration)
+        automap.prepare(name_for_collection_relationship=self._pluralize_collection)
+
+        self.orm._add_schema(name=schema, tables=list(automap.classes))
+        self.objects._add_schema(name=schema, tables=[new_meta.tables[item] for item in new_meta.tables])
 
     def _get_metadata(self) -> None:
         meta = self.cache.setdefault(self.name, alch.MetaData())
@@ -92,10 +104,9 @@ class Database:
 
 
 class Schemas(NameSpaceObject):
-    def __init__(self, database: Database, tables: list) -> None:
+    def __init__(self, database: Database) -> None:
         super().__init__()
         self._database = database
-        self._set_schemas_from_tables(tables=tables)
 
     def __repr__(self) -> str:
         return f"""{type(self).__name__}(num_schemas={len(self)}, schemas=[{", ".join([f"{type(schema).__name__}(name='{schema._name}', tables={len(schema)})" for name, schema in self])}])"""
@@ -111,15 +122,6 @@ class Schemas(NameSpaceObject):
             self._database.reflect(attr)
 
         return super().__getattribute__(attr)
-
-    def _set_schemas_from_tables(self, tables: list) -> None:
-        schemas = {}
-        for table in tables:
-            schema = Maybe(table).__table__.else_(table).schema
-            schemas.setdefault(schema, []).append(table)
-
-        for schema, tables in schemas.items():
-            self._add_schema(schema, tables)
 
     def _add_schema(self, name: str, tables: list) -> None:
         name = Maybe(name).else_("dbo")
