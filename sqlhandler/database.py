@@ -9,7 +9,7 @@ from sqlalchemy.ext.declarative import declarative_base
 from maybe import Maybe
 from subtypes import Str
 from pathmagic import File
-from miscutils import NameSpace, Cache
+from miscutils import NameSpaceObject, Cache
 
 from sqlhandler import localres
 from .custom import Base
@@ -69,7 +69,7 @@ class Database:
         self.meta.clear()
         self.cache[self.name] = self.meta
         for namespace in (self.orm, self.objects):
-            namespace._clear_namespace()
+            namespace._clear()
 
     def _refresh_bases(self) -> None:
         self.declaration = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=Base)
@@ -91,7 +91,7 @@ class Database:
         return str(Str(referred_name).snake_case().plural())
 
 
-class Schemas(NameSpace):
+class Schemas(NameSpaceObject):
     def __init__(self, database: Database, tables: list) -> None:
         super().__init__()
         self._database = database
@@ -126,7 +126,7 @@ class Schemas(NameSpace):
         self[name] = Schema(database=self._database, name=name, tables=tables)
 
 
-class Schema(NameSpace):
+class Schema(NameSpaceObject):
     def __init__(self, database: Database, name: str, tables: list) -> None:
         super().__init__(mappings={Maybe(table).__table__.else_(table).name: table for table in tables})
         self._database, self._name = database, name
