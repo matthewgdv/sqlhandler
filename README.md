@@ -13,7 +13,7 @@ To install use pip:
 
 Or clone the repo:
 
-    $ git clone https://github.com/matthewgdv/[project_name].git
+    $ git clone https://github.com/matthewgdv/sqlhandler.git
     $ python setup.py install
 
 
