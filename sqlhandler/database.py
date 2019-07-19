@@ -134,7 +134,7 @@ class Schemas(NameSpaceObject):
 
 class Schema(NameSpaceObject):
     def __init__(self, database: Database, name: str, tables: list) -> None:
-        super().__init__(mappings={Maybe(table).__table__.else_(table).name: table for table in tables})
+        super().__init__({Maybe(table).__table__.else_(table).name: table for table in tables})
         self._database, self._name = database, name
 
     def __repr__(self) -> str:
