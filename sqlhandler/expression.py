@@ -207,7 +207,7 @@ class Insert(alch.sql.Insert, SqlBoundMixin, ExpressionMixin):
             values: List[List[str]] = sum([nested_list_of_vals_from_paren(paren) for paren in parens], [])
             return headers + values
 
-        start = Str(literal).before_first(r"\(")
+        start = Str(literal).slice.before_first(r"\(")
         sublists = extract_parentheses(literal)
         for sublist in sublists:
             sublist[0] = f"({sublist[0]}"

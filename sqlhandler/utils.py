@@ -175,7 +175,7 @@ def literalstatement(statement: Any, format_statement: bool = True) -> str:
 
     bound = statement.compile(compile_kwargs={'literal_binds': True}).string + ";"
     formatted = sqlparse.format(bound, reindent=True, wrap_after=1000) if format_statement else bound  # keyword_case="upper" (removed arg due to false positives)
-    final = Str(formatted).sub(r"\bOVER \(\s*", lambda m: m.group().strip()).sub(r"(?<=\n)([^\n]*JOIN[^\n]*)(\bON\b[^\n;]*)(?=[\n;])", lambda m: f"  {m.group(1).strip()}\n    {m.group(2).strip()}")
+    final = Str(formatted).re.sub(r"\bOVER \(\s*", lambda m: m.group().strip()).re.sub(r"(?<=\n)([^\n]*JOIN[^\n]*)(\bON\b[^\n;]*)(?=[\n;])", lambda m: f"  {m.group(1).strip()}\n    {m.group(2).strip()}")
     return str(final)
 
 

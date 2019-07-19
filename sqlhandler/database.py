@@ -19,7 +19,6 @@ if TYPE_CHECKING:
     from .sql import Sql
 
 
-
 class Database:
     def __init__(self, sql: Sql) -> None:
         self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=File.from_resource(localres, "sql_cache", "pkl"), days=5)
@@ -102,7 +101,7 @@ class Database:
     @staticmethod
     def _pluralize_collection(base: Any, local_cls: Any, referred_cls: Any, constraint: Any) -> str:
         referred_name = referred_cls.__name__
-        return str(Str(referred_name).snake_case().plural())
+        return str(Str(referred_name).case.snake().case.plural())
 
 
 class Schemas(NameSpaceObject):
