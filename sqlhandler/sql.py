@@ -32,8 +32,8 @@ class Sql:
     The custom query class provided by the Alchemy object's 'session' attribute also has additional methods. Many commonly used sqlalchemy objects are bound to this object as attributes for easy access.
     """
 
-    def __init__(self, host: str = None, database: str = None, log: File = None, autocommit: bool = False) -> None:
-        self.engine = self._create_engine(host=host, database=database)
+    def __init__(self, host: str = None, database: str = None, log: File = None, autocommit: bool = False, virtual: bool = False) -> None:
+        self.engine = self._create_engine(host=host, database=database, virtual=virtual)
         self.session = Session(self.engine, sql=self)
 
         self.database = Database(self)
@@ -183,8 +183,10 @@ class Sql:
 
     # Private internal methods
 
-    def _create_engine(self, host: str, database: str) -> alch.engine.base.Engine:
-        url = Config().generate_url(host=host, database=database)
+    def _create_engine(self, host: str, database: str, virtual: bool) -> alch.engine.base.Engine:
+        from sqlalchemy.engine.url import URL as Url
+
+        url = Config().generate_url(host=host, database=database) if not virtual else Url("sqlite")
         return alch.create_engine(str(url), echo=False, dialect=self._create_literal_dialect(url.get_dialect()))
 
     def _create_literal_dialect(self, dialect_class: alch.engine.default.DefaultDialect) -> alch.engine.default.DefaultDialect:
