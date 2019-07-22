@@ -17,7 +17,7 @@ if TYPE_CHECKING:
     from .sql import Sql
 
 
-class Base:
+class Model:
     """Custom base class for declarative and automap bases to inherit from."""
     sql: Sql
     __table__: alch.Table
@@ -53,11 +53,11 @@ class Base:
     def frame(self) -> Frame:
         return self.sql.orm_to_frame(self)
 
-    def insert(self) -> Base:
+    def insert(self) -> Model:
         self.sql.session.add(self)
         return self
 
-    def update(self, argdeltas: dict = None, **update_kwargs: Any,) -> Base:
+    def update(self, argdeltas: dict = None, **update_kwargs: Any,) -> Model:
         def ensure_names_are_valid(argnames: list) -> None:
             valid_names = set(vars(type(self)))
             for name in argnames:
@@ -75,7 +75,7 @@ class Base:
 
         return self
 
-    def delete(self) -> Base:
+    def delete(self) -> Model:
         self.sql.session.delete(self)
         return self
 

@@ -12,7 +12,7 @@ from subtypes import Str
 from miscutils import NameSpaceObject, Cache
 
 from .appdata import appdata
-from .custom import Base
+from .custom import Model
 
 if TYPE_CHECKING:
     from .sql import Sql
@@ -22,7 +22,7 @@ class Database:
     def __init__(self, sql: Sql) -> None:
         self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=appdata.newfile("sql_cache", "pkl"), days=5)
         self.meta = self._get_metadata()
-        self.declaration = self.reflection = None  # type: Base
+        self.declaration = self.reflection = None  # type: Model
         self.orm, self.objects = Schemas(database=self), Schemas(database=self)
 
         self._refresh_declarative_base()
@@ -71,7 +71,7 @@ class Database:
             namespace._clear()
 
     def _refresh_declarative_base(self) -> None:
-        self.declaration = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=Base)
+        self.declaration = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=Model)
         self.declaration.sql = self.sql
 
     def _add_schema_to_namespaces(self, schema: str) -> None:
@@ -80,7 +80,7 @@ class Database:
         for table in invalid_tables:
             new_meta.remove(new_meta.tables[table])
 
-        declaration = declarative_base(bind=self.sql.engine, metadata=new_meta, cls=Base)
+        declaration = declarative_base(bind=self.sql.engine, metadata=new_meta, cls=Model)
         declaration.sql = self.sql
 
         automap = automap_base(declarative_base=declaration)
@@ -94,7 +94,7 @@ class Database:
         meta.bind = self.sql.engine
         return meta
 
-    def _normalize_table(self, table: Union[Base, alch.schema.Table]) -> alch.schema.Table:
+    def _normalize_table(self, table: Union[Model, alch.schema.Table]) -> alch.schema.Table:
         return Maybe(table).__table__.else_(table)
 
     @staticmethod
@@ -142,7 +142,7 @@ class Schema(NameSpaceObject):
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name={repr(self._name)}, num_tables={len(self)}, tables={[table for table, _ in self]})"
 
-    def __getattr__(self, attr: str) -> Base:
+    def __getattr__(self, attr: str) -> Model:
         if not attr.startswith("_"):
             self._database.reflect(self._name)
 
