@@ -9,10 +9,9 @@ from sqlalchemy.ext.declarative import declarative_base
 
 from maybe import Maybe
 from subtypes import Str
-from pathmagic import File
 from miscutils import NameSpaceObject, Cache
 
-from sqlhandler import localres
+from .appdata import appdata
 from .custom import Base
 
 if TYPE_CHECKING:
@@ -21,7 +20,7 @@ if TYPE_CHECKING:
 
 class Database:
     def __init__(self, sql: Sql) -> None:
-        self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=File.from_resource(localres, "sql_cache", "pkl"), days=5)
+        self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=appdata.newfile("sql_cache", "pkl"), days=5)
         self.meta = self._get_metadata()
         self.declaration = self.reflection = None  # type: Base
         self.orm, self.objects = Schemas(database=self), Schemas(database=self)

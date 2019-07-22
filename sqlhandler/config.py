@@ -5,9 +5,9 @@ from subtypes import Enum
 from pathmagic import PathLike, File
 from miscutils import NameSpace
 
-from sqlhandler import localres
-
 from sqlalchemy.engine.url import URL
+
+from .appdata import appdata
 
 
 class Config:
@@ -15,7 +15,7 @@ class Config:
         MS_SQL, MY_SQL, SQLITE, POSTGRESQL, ORACLE = "mssql", "mysql", "sqlite", "posgresql", "oracle"
 
     def __init__(self, path: PathLike = None) -> None:
-        self.resources = File.from_resource(package=localres, name="config", extension="json") if path is None else File.from_pathlike(path)
+        self.resources = appdata.newfile(name="config", extension="json") if path is None else File.from_pathlike(path)
         self.data: NameSpace = Maybe(self.resources.contents).else_(NameSpace(default_host=None, hosts={}))
 
     def __repr__(self) -> str:
@@ -38,6 +38,18 @@ class Config:
 
     def save(self) -> None:
         self.resources.contents = self.data
+
+    def import_(self, path: PathLike) -> None:
+        self.resources = File.from_pathlike(path)
+
+    def export(self, path: PathLike) -> None:
+        self.resources.copy(path)
+
+    def export_to(self, path: PathLike) -> None:
+        self.resources.copyto(path)
+
+    def open(self) -> File:
+        return self.resources.open()
 
     def generate_url(self, host: str = None, database: str = None) -> str:
         host = Maybe(host).else_(self.data.default_host)
