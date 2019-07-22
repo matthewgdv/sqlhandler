@@ -132,6 +132,7 @@ class Sql:
 
     def frame_to_table(self, dataframe: pd.DataFrame, table: str, schema: str = None, if_exists: str = "fail", primary_key: str = "id", identity: bool = True) -> Base:
         """Bulk insert the contents of a pandas DataFrame to the specified table."""
+        dataframe = dataframe.copy()
         if primary_key is not None:
             if identity:
                 dataframe.reset_index(inplace=True, drop=True)

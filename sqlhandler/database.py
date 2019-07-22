@@ -129,7 +129,10 @@ class Schemas(NameSpaceObject):
 
     def _add_schema(self, name: str, tables: list) -> None:
         name = Maybe(name).else_("dbo")
-        self[name] = Schema(database=self._database, name=name, tables=tables)
+        if name in self:
+            self[name]._refresh_from_tables(tables)
+        else:
+            self[name] = Schema(database=self._database, name=name, tables=tables)
 
 
 class Schema(NameSpaceObject):
@@ -148,3 +151,8 @@ class Schema(NameSpaceObject):
             return super().__getattribute__(attr)
         except AttributeError:
             raise AttributeError(f"{type(self).__name__} '{self._name}' of {type(self._database).__name__} '{self._database.name}' has no object '{attr}'.")
+
+    def _refresh_from_tables(self, tables: list) -> None:
+        self._clear()
+        for name, table in {Maybe(table).__table__.else_(table).name: table for table in tables}.items():
+            self[name] = table
