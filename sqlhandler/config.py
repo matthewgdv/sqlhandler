@@ -62,7 +62,6 @@ class Config:
         return Maybe(file.contents).else_(NameSpace(default_host=None, hosts={}))
 
 
-
 class Url(URL):
     def __init__(self, drivername: str = None, username: str = None, password: str = None, host: str = None, port: str = None, database: str = None, query: dict = None) -> None:
         super().__init__(drivername=drivername, username=Maybe(username).else_(""), password=password, host=host, port=port, database=database, query=query)
