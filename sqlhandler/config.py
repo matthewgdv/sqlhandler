@@ -55,7 +55,7 @@ class Config:
         host = Maybe(host).else_(self.data.default_host)
         host_settings = self.data.hosts[host]
         database = Maybe(database).else_(host_settings.default_database)
-        return Url(drivername=host_settings.drivername, username=host_settings.username, password=host_settings.password, host=host, port=host_settings.port, database=database, query=host_settings.query.to_dict())
+        return Url(drivername=host_settings.drivername, username=host_settings.username, password=host_settings.password, host=host, port=host_settings.port, database=database, query=Maybe(host_settings.query).to_dict().else_(None))
 
     @staticmethod
     def _read_to_namespace(file: File) -> NameSpace:
