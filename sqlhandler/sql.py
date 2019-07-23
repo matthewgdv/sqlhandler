@@ -14,7 +14,7 @@ from subtypes import Frame
 from pathmagic import File
 from miscutils.serializer import LostObject
 
-from .custom import Base, Query, Session, StringLiteral, BitLiteral
+from .custom import Model, Query, Session, StringLiteral, BitLiteral
 from .expression import Select, Update, Insert, Delete, SelectInto
 from .utils import StoredProcedure, Script, clone
 from .log import SqlLog
@@ -45,7 +45,7 @@ class Sql:
         self.StoredProcedure, self.Script = StoredProcedure.from_sql(self), Script.from_sql(self)
 
         self.text, self.literal, self.clone, self.alias = alch.text, alch.literal, clone, aliased
-        self.AND, self.OR, self.CAST, self.CASE = alch.and_, alch.or_, alch.cast, alch.case
+        self.AND, self.OR, self.CAST, self.CASE, self.TRUE, self.FALSE = alch.and_, alch.or_, alch.cast, alch.case, alch.true(), alch.false()
 
         self.Table, self.Column, self.ForeignKey, self.Relationship, self.Backref = alch.Table, alch.Column, alch.ForeignKey, relationship, backref
         self.type, self.func, self.sqlalchemy = alch.types, alch.func, alch
@@ -75,7 +75,7 @@ class Sql:
         self.__dict__ = attrs
 
     @property
-    def Model(self) -> Base:
+    def Model(self) -> Model:
         return self.database.declaration
 
     @property
@@ -126,11 +126,11 @@ class Sql:
         """Reads the target table or view (from the specified schema) into a pandas DataFrame."""
         return Frame(pd.read_sql_table(table, self.engine, schema=schema))
 
-    def excel_to_table(self, filepath: os.PathLike, table: str = "temp", schema: str = None, if_exists: str = "fail", primary_key: str = "id", identity: bool = True, **kwargs: Any) -> Base:
+    def excel_to_table(self, filepath: os.PathLike, table: str = "temp", schema: str = None, if_exists: str = "fail", primary_key: str = "id", identity: bool = True, **kwargs: Any) -> Model:
         """Bulk insert the contents of the target '.xlsx' file to the specified table."""
         return self.frame_to_table(dataframe=Frame.from_excel(filepath, **kwargs), table=table, schema=schema, if_exists=if_exists, primary_key=primary_key, identity=identity)
 
-    def frame_to_table(self, dataframe: pd.DataFrame, table: str, schema: str = None, if_exists: str = "fail", primary_key: str = "id", identity: bool = True) -> Base:
+    def frame_to_table(self, dataframe: pd.DataFrame, table: str, schema: str = None, if_exists: str = "fail", primary_key: str = "id", identity: bool = True) -> Model:
         """Bulk insert the contents of a pandas DataFrame to the specified table."""
         dataframe = Frame(dataframe)
         if primary_key is not None:
@@ -167,15 +167,15 @@ class Sql:
 
         return Frame(vals, columns=cols)
 
-    def create_table(self, table: Union[Base, alch.schema.Table]) -> None:
+    def create_table(self, table: Union[Model, alch.schema.Table]) -> None:
         """Drop a table or the table belonging to an ORM class and remove it from the metadata."""
         self.database.create_table(table)
 
-    def drop_table(self, table: Union[Base, alch.schema.Table]) -> None:
+    def drop_table(self, table: Union[Model, alch.schema.Table]) -> None:
         """Drop a table or the table belonging to an ORM class and remove it from the metadata."""
         self.database.drop_table(table)
 
-    def refresh_table(self, table: Union[Base, alch.schema.Table]) -> None:
+    def refresh_table(self, table: Union[Model, alch.schema.Table]) -> None:
         self.database.refresh_table(table=table)
 
     def clear_metadata(self) -> None:
