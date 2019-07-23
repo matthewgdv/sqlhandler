@@ -16,7 +16,7 @@ class Config:
 
     def __init__(self, path: PathLike = None) -> None:
         self.resources = appdata.newfile(name="config", extension="json") if path is None else File.from_pathlike(path)
-        self.data: NameSpace = Maybe(self.resources.contents).else_(NameSpace(default_host=None, hosts={}))
+        self.data: NameSpace = self._read_to_namespace(self.resources)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
@@ -40,7 +40,7 @@ class Config:
         self.resources.contents = self.data
 
     def import_(self, path: PathLike) -> None:
-        self.resources = File.from_pathlike(path)
+        self.data = self._read_to_namespace(File.from_pathlike(path))
 
     def export(self, path: PathLike) -> None:
         self.resources.copy(path)
@@ -56,6 +56,11 @@ class Config:
         host_settings = self.data.hosts[host]
         database = Maybe(database).else_(host_settings.default_database)
         return Url(drivername=host_settings.drivername, username=host_settings.username, password=host_settings.password, host=host, port=host_settings.port, database=database, query=host_settings.query.to_dict())
+
+    @staticmethod
+    def _read_to_namespace(file: File) -> NameSpace:
+        return Maybe(file.contents).else_(NameSpace(default_host=None, hosts={}))
+
 
 
 class Url(URL):
