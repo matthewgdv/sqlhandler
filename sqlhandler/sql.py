@@ -220,11 +220,11 @@ class Sql:
                 if 0 <= minimum and maximum <= 255:
                     return alch.dialects.mssql.TINYINT
                 elif -2**15 <= minimum and maximum <= 2**15:
-                    return alch.types.SMALLINT
+                    return alch.types.SmallInteger
                 elif -2**31 <= minimum and maximum <= 2**31:
-                    return alch.types.INT
+                    return alch.types.Integer
                 else:
-                    return alch.types.BIGINT
+                    return alch.types.BigInteger
             elif series.dtype.name == "object":
                 return alch.types.String(int((series.fillna("").astype(str).str.len().max()//50 + 1)*50))
             else:
