@@ -27,7 +27,7 @@ class ExpressionMixin:
     def _resolve_tran(self, force_commit: bool = False) -> None:
         """Request user confirmation to resolve the ongoing transaction."""
         if self.sql.autocommit or force_commit:
-            self.session.commit()
+            self.sql.session.commit()
             self.sql.log.write("COMMIT;", add_newlines=2)
         else:
             user_confirmation = input("\nIf you are happy with the above Query/Queries please type COMMIT. Anything else will roll back the ongoing Transaction.\n\n")
