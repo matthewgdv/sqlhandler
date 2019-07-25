@@ -6,7 +6,7 @@ from abc import ABC, abstractmethod
 import sqlalchemy as alch
 import sqlalchemy.sql.sqltypes
 import sqlparse
-from sqlalchemy.orm import Query, make_transient
+from sqlalchemy.orm import Query
 from pyodbc import ProgrammingError
 
 from subtypes import Frame, Str
@@ -14,7 +14,6 @@ from pathmagic import File, PathLike
 
 if TYPE_CHECKING:
     from .sql import Sql
-    from .custom import Base
 
 
 SelfType = TypeVar("SelfType")
@@ -177,13 +176,3 @@ def literalstatement(statement: Any, format_statement: bool = True) -> str:
     formatted = sqlparse.format(bound, reindent=True, wrap_after=1000) if format_statement else bound  # keyword_case="upper" (removed arg due to false positives)
     final = Str(formatted).re.sub(r"\bOVER \(\s*", lambda m: m.group().strip()).re.sub(r"(?<=\n)([^\n]*JOIN[^\n]*)(\bON\b[^\n;]*)(?=[\n;])", lambda m: f"  {m.group(1).strip()}\n    {m.group(2).strip()}")
     return str(final)
-
-
-def clone(record: Base) -> Base:
-    make_transient(record)
-
-    pk_cols = list(record.__table__.primary_key.columns)
-    for col in pk_cols:
-        setattr(record, col.name, None)
-
-    return record

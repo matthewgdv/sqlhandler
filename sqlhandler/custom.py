@@ -5,6 +5,7 @@ from typing import Any, Union, TYPE_CHECKING
 import pandas as pd
 import sqlalchemy as alch
 from sqlalchemy.orm.util import AliasedClass
+from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.sql.base import ImmutableColumnCollection
 from sqlalchemy.dialects.mssql import BIT
 
@@ -78,6 +79,10 @@ class Model:
     def delete(self) -> Model:
         self.sql.session.delete(self)
         return self
+
+    def clone(self, *args: Any, **kwargs: Any) -> Model:
+        valid_cols = [key for key, val in vars(type(self)).items() if isinstance(val, InstrumentedAttribute) and key not in self.__table__.primary_key.columns]
+        return type(self)(**{key: getattr(self, key) for key in valid_cols}).update(*args, **kwargs)
 
 
 class Session(alch.orm.Session):
