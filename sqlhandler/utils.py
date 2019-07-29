@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 from typing import Any, List, Callable, TypeVar, TYPE_CHECKING
-
 from abc import ABC, abstractmethod
+
 import sqlalchemy as alch
 import sqlalchemy.sql.sqltypes
-import sqlparse
 from sqlalchemy.orm import Query
-from pyodbc import ProgrammingError
+import sqlparse
 
 from subtypes import Frame, Str
 from pathmagic import File, PathLike
@@ -71,7 +70,7 @@ class Executable(SqlBoundMixin, ABC):
         try:
             statement, sql_args = self._compile_sql(*args, **kwargs)
             result = self.cursor.execute(statement, *sql_args)
-        except ProgrammingError as ex:
+        except Exception as ex:
             self.exception = ex
 
         self.result = self._get_frames_from_result(result) if result is not None else None
@@ -112,7 +111,7 @@ class Executable(SqlBoundMixin, ABC):
         def get_frame_from_result(result: Any) -> Frame:
             try:
                 return Frame([tuple(row) for row in result.fetchall()], columns=[info[0] for info in result.description])
-            except ProgrammingError:
+            except Exception:
                 return None
 
         data = [get_frame_from_result(result)]

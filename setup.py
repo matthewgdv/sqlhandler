@@ -23,7 +23,14 @@ setup(
     ],
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
-
+        "maybe-else",
+        "numpy",
+        "pandas",
+        "pathmagic",
+        "pymiscutils",
+        "pysubtypes",
+        "sqlalchemy",
+        "sqlparse"
     ],
     author="Matt GdV",
     author_email="matthewgdv@gmail.com"
