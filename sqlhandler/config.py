@@ -10,9 +10,12 @@ from sqlalchemy.engine.url import URL
 from .appdata import appdata
 
 
+class Dialect(Enum):
+    MS_SQL, MY_SQL, SQLITE, POSTGRESQL, ORACLE = "mssql", "mysql", "sqlite", "posgresql", "oracle"
+
+
 class Config:
-    class Dialect(Enum):
-        MS_SQL, MY_SQL, SQLITE, POSTGRESQL, ORACLE = "mssql", "mysql", "sqlite", "posgresql", "oracle"
+    Dialect = Dialect
 
     def __init__(self, path: PathLike = None) -> None:
         self.resources = appdata.newfile(name="config", extension="json") if path is None else File.from_pathlike(path)
@@ -25,6 +28,9 @@ class Config:
         self.data.hosts[host] = NameSpace(drivername=drivername, default_database=default_database, username=username, password=password, port=port, query=query)
         if is_default:
             self.set_default_host(host=host)
+
+    def add_mssql_host_with_integrated_security(self, host: str, default_database: str, is_default: bool = False):
+        self.add_host(host=host, drivername=Dialect.MS_SQL, default_database=default_database, is_default=is_default, query={"driver": "SQL+Server"})
 
     def set_default_host(self, host: str) -> None:
         if host in self.data.hosts:
@@ -59,7 +65,7 @@ class Config:
 
     @staticmethod
     def _read_to_namespace(file: File) -> NameSpace:
-        return Maybe(file.contents).else_(NameSpace(default_host=None, hosts={}))
+        return Maybe(file.contents).else_(NameSpace(default_host="", hosts={}))
 
 
 class Url(URL):
