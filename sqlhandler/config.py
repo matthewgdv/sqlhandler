@@ -18,8 +18,8 @@ class Config:
     Dialect = Dialect
 
     def __init__(self, path: PathLike = None) -> None:
-        self.resources = appdata.newfile(name="config", extension="json") if path is None else File.from_pathlike(path)
-        self.data: NameSpace = self._read_to_namespace(self.resources)
+        self.file = appdata.newfile(name="config", extension="json") if path is None else File.from_pathlike(path)
+        self.data: NameSpace = self._read_to_namespace(self.file)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
@@ -43,19 +43,19 @@ class Config:
         self.save()
 
     def save(self) -> None:
-        self.resources.contents = self.data
+        self.file.contents = self.data
 
     def import_(self, path: PathLike) -> None:
         self.data = self._read_to_namespace(File.from_pathlike(path))
 
     def export(self, path: PathLike) -> None:
-        self.resources.copy(path)
+        self.file.copy(path)
 
     def export_to(self, path: PathLike) -> None:
-        self.resources.copyto(path)
+        self.file.copyto(path)
 
     def open(self) -> File:
-        return self.resources.open()
+        return self.file.open()
 
     def generate_url(self, host: str = None, database: str = None) -> str:
         host = Maybe(host).else_(self.data.default_host)
@@ -65,6 +65,11 @@ class Config:
 
     @staticmethod
     def _read_to_namespace(file: File) -> NameSpace:
+        file = File.from_pathlike(file)
+
+        if file.extension != "json":
+            raise TypeError(f"Config file must be type 'json'.")
+
         return Maybe(file.contents).else_(NameSpace(default_host="", hosts={}))
 
 

@@ -8,7 +8,7 @@ from typing import Any, Set, Dict, Union, TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import sqlalchemy as alch
-from sqlalchemy.orm import aliased, backref, relationship
+from sqlalchemy.orm import backref, relationship
 
 from subtypes import Frame
 from pathmagic import File
@@ -44,13 +44,11 @@ class Sql:
         self.Insert, self.Delete = Insert.from_sql(self), Delete.from_sql(self)
         self.StoredProcedure, self.Script = StoredProcedure.from_sql(self), Script.from_sql(self)
 
-        self.text, self.literal, self.alias = alch.text, alch.literal, aliased
+        self.text, self.literal = alch.text, alch.literal
         self.AND, self.OR, self.CAST, self.CASE, self.TRUE, self.FALSE = alch.and_, alch.or_, alch.cast, alch.case, alch.true(), alch.false()
 
-        self.Table, self.Column, self.ForeignKey, self.Relationship, self.Backref = alch.Table, alch.Column, alch.ForeignKey, relationship, backref
+        self.Table, self.Column, self.Relationship, self.Backref, self.ForeignKey, self.Index, self.CheckConstraint = alch.Table, alch.Column, relationship, backref, alch.ForeignKey, alch.Index, alch.CheckConstraint
         self.type, self.func, self.sqlalchemy = alch.types, alch.func, alch
-
-        pd.set_option("max_columns", None)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(engine={repr(self.engine)}, database={repr(self.database)})"
