@@ -7,7 +7,7 @@ from miscutils import NameSpace
 
 from sqlalchemy.engine.url import URL
 
-from .appdata import appdata
+from .appdata import appdata, global_appdata
 
 
 class Dialect(Enum):
@@ -17,8 +17,8 @@ class Dialect(Enum):
 class Config:
     Dialect = Dialect
 
-    def __init__(self, path: PathLike = None) -> None:
-        self.file = appdata.newfile(name="config", extension="json") if path is None else File.from_pathlike(path)
+    def __init__(self, path: PathLike = None, global_config: bool = False) -> None:
+        self.file = (appdata if not global_config else global_appdata).newfile(name="config", extension="json") if path is None else File.from_pathlike(path)
         self.data: NameSpace = self._read_to_namespace(self.file)
 
     def __repr__(self) -> str:
@@ -70,7 +70,8 @@ class Config:
         if file.extension != "json":
             raise TypeError(f"Config file must be type 'json'.")
 
-        return Maybe(file.contents).else_(NameSpace(default_host="", hosts={}))
+        contents = file.contents
+        return contents if contents is not None else NameSpace(default_host="", hosts={"": dict(drivername="sqlite", default_database=None, username=None, password=None, port=None, query=None)})
 
 
 class Url(URL):
