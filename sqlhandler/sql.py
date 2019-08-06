@@ -10,7 +10,7 @@ import pandas as pd
 import sqlalchemy as alch
 from sqlalchemy.orm import backref, relationship
 
-from subtypes import Frame
+from subtypes import Frame, Enum
 from pathmagic import File
 from miscutils.serializer import LostObject
 
@@ -31,6 +31,9 @@ class Sql:
     The custom expression classes provided have additional useful methods and are modified by the 'autocommit' attribute to facilitate human-supervised queries.
     The custom query class provided by the Alchemy object's 'session' attribute also has additional methods. Many commonly used sqlalchemy objects are bound to this object as attributes for easy access.
     """
+
+    class IfExists(Enum):
+        FAIL, REPLACE, APPEND = "fail", "replace", "append"
 
     def __init__(self, host: str = None, database: str = None, log: File = None, autocommit: bool = False, global_config: bool = False) -> None:
         self.engine = self._create_engine(host=host, database=database, global_config=global_config)
