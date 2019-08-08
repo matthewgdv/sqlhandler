@@ -33,12 +33,13 @@ class Database:
         return f"{type(self).__name__}(name={repr(self.name)}, orm={repr(self.orm)}, objects={repr(self.objects)}, cache={repr(self.cache)})"
 
     def reflect(self, schema: str = None) -> None:
-        num_tables_before = len(self.meta.tables)
+        schema = None if schema == "dbo" else schema
+
         self.meta.reflect(schema=schema, views=True)
-        if len(self.meta.tables) > num_tables_before:
-            self._refresh_declarative_base()
-            self._add_schema_to_namespaces(schema)
-            self.cache[self.name] = self.meta
+        self._refresh_declarative_base()
+        self._add_schema_to_namespaces(schema)
+
+        self.cache[self.name] = self.meta
 
     def create_table(self, table: alch.schema.Table) -> None:
         table = self._normalize_table(table)
@@ -75,8 +76,13 @@ class Database:
         self.declaration.sql = self.sql
 
     def _add_schema_to_namespaces(self, schema: str) -> None:
+        schema = None if schema == "dbo" else schema
+
         new_meta = copy.deepcopy(self.meta)
-        invalid_tables = {table for table in new_meta.tables if not Maybe(new_meta.tables[table].schema).lower().else_(None) == Maybe(schema).lower().else_(None)}
+        invalid_tables = ({table for table in new_meta.tables if new_meta.tables[table].schema is not None}
+                          if schema is None else
+                          {table for table in new_meta.tables if new_meta.tables[table].schema is None or new_meta.tables[table].schema.lower() != schema})
+
         for table in invalid_tables:
             new_meta.remove(new_meta.tables[table])
 

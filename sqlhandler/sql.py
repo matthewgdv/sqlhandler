@@ -131,24 +131,30 @@ class Sql:
         """Bulk insert the contents of the target '.xlsx' file to the specified table."""
         return self.frame_to_table(dataframe=Frame.from_excel(filepath, **kwargs), table=table, schema=schema, if_exists=if_exists, primary_key=primary_key, identity=identity)
 
-    def frame_to_table(self, dataframe: pd.DataFrame, table: str, schema: str = None, if_exists: str = "fail", primary_key: str = "id", identity: bool = True) -> Model:
+    def frame_to_table(self, dataframe: pd.DataFrame, table: str, schema: str = None, if_exists: str = "fail", primary_key: str = "id") -> Model:
         """Bulk insert the contents of a pandas DataFrame to the specified table."""
         dataframe = Frame(dataframe)
-        if primary_key is not None:
-            if identity:
+
+        has_identity_pk = False
+        if primary_key is None:
+            dataframe.reset_index(inplace=True)
+            primary_key = dataframe.iloc[:, 0].name
+        else:
+            if primary_key in dataframe.columns:
+                dataframe.set_index(primary_key, inplace=True)
+            else:
+                has_identity_pk = True
                 dataframe.reset_index(inplace=True, drop=True)
                 dataframe.index.names = [primary_key]
                 dataframe.index += 1
-                dataframe.reset_index(inplace=True)
-            else:
-                dataframe.index.names = [primary_key]
-                dataframe.reset_index(inplace=True)
+
+            dataframe.reset_index(inplace=True)
 
         dtypes = self._sql_dtype_dict_from_frame(dataframe)
-        if primary_key is not None and identity:
+        if has_identity_pk:
             dtypes.update({primary_key: alch.types.INT})
 
-        dataframe.infer_dtypes().to_sql(engine=self.engine, name=table, if_exists=if_exists, index=False, index_label=None, primary_key=primary_key, schema=schema, dtype=dtypes)
+        dataframe.to_sql(engine=self.engine, name=table, if_exists=if_exists, index=False, index_label=None, primary_key=primary_key, schema=schema, dtype=dtypes)
 
         table_object = self.orm[schema][table]
         self.refresh_table(table=table_object)
@@ -214,16 +220,19 @@ class Sql:
         def sqlalchemy_dtype_from_series(series: pd.code.series.Series) -> Any:
             if series.dtype.name in ["int64", "Int64"]:
                 nums = [num for num in series if not isnull(num)]
-                minimum, maximum = min(nums), max(nums)
-
-                if 0 <= minimum and maximum <= 255:
-                    return alch.dialects.mssql.TINYINT
-                elif -2**15 <= minimum and maximum <= 2**15:
-                    return alch.types.SmallInteger
-                elif -2**31 <= minimum and maximum <= 2**31:
+                if not nums:
                     return alch.types.Integer
                 else:
-                    return alch.types.BigInteger
+                    minimum, maximum = min(nums), max(nums)
+
+                    if 0 <= minimum and maximum <= 255:
+                        return alch.dialects.mssql.TINYINT
+                    elif -2**15 <= minimum and maximum <= 2**15:
+                        return alch.types.SmallInteger
+                    elif -2**31 <= minimum and maximum <= 2**31:
+                        return alch.types.Integer
+                    else:
+                        return alch.types.BigInteger
             elif series.dtype.name == "object":
                 return alch.types.String(int((series.fillna("").astype(str).str.len().max()//50 + 1)*50))
             else:
