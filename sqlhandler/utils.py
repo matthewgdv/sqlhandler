@@ -43,7 +43,7 @@ class Executable(SqlBoundMixin, ABC):
         self.results: List[List[Frame]] = []
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        self.args, self.kwargs = args, self.kwargs
+        self.args, self.kwargs = args, kwargs
         return self
 
     def __bool__(self) -> bool:
@@ -128,6 +128,9 @@ class StoredProcedure(Executable):
         super().__init__(sql=sql)
         self.name, self.schema = name, schema
 
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(name={self.name}, schema={self.schema}, args={self.args}, kwargs={self.kwargs})"
+
     def _compile_sql(self, *args: Any, **kwargs: Any) -> Frame:
         return (f"EXEC {self.schema}.{self.name} {', '.join(list('?'*len(args)) + [f'@{arg}=?' for arg in kwargs.keys()])};", [*args, *list(kwargs.values())])
 
@@ -136,6 +139,9 @@ class Script(Executable):
     def __init__(self, path: PathLike, sql: Sql = None) -> None:
         super().__init__(sql=sql)
         self.file = File.from_pathlike(path)
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(file={self.name})"
 
     def _compile_sql(self, *args: Any, **kwargs: Any) -> Frame:
         return (self.file.contents, [])
