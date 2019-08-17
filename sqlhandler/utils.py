@@ -1,20 +1,18 @@
 from __future__ import annotations
 
 from typing import Any, List, Callable, TypeVar, TYPE_CHECKING
-
 from abc import ABC, abstractmethod
+
 import sqlalchemy as alch
 import sqlalchemy.sql.sqltypes
+from sqlalchemy.orm import Query
 import sqlparse
-from sqlalchemy.orm import Query, make_transient
-from pyodbc import ProgrammingError
 
 from subtypes import Frame, Str
 from pathmagic import File, PathLike
 
 if TYPE_CHECKING:
     from .sql import Sql
-    from .custom import Base
 
 
 SelfType = TypeVar("SelfType")
@@ -72,7 +70,7 @@ class Executable(SqlBoundMixin, ABC):
         try:
             statement, sql_args = self._compile_sql(*args, **kwargs)
             result = self.cursor.execute(statement, *sql_args)
-        except ProgrammingError as ex:
+        except Exception as ex:
             self.exception = ex
 
         self.result = self._get_frames_from_result(result) if result is not None else None
@@ -113,7 +111,7 @@ class Executable(SqlBoundMixin, ABC):
         def get_frame_from_result(result: Any) -> Frame:
             try:
                 return Frame([tuple(row) for row in result.fetchall()], columns=[info[0] for info in result.description])
-            except ProgrammingError:
+            except Exception:
                 return None
 
         data = [get_frame_from_result(result)]
@@ -183,13 +181,3 @@ def literalstatement(statement: Any, format_statement: bool = True) -> str:
     formatted = sqlparse.format(bound, reindent=True, wrap_after=1000) if format_statement else bound  # keyword_case="upper" (removed arg due to false positives)
     final = Str(formatted).re.sub(r"\bOVER \(\s*", lambda m: m.group().strip()).re.sub(r"(?<=\n)([^\n]*JOIN[^\n]*)(\bON\b[^\n;]*)(?=[\n;])", lambda m: f"  {m.group(1).strip()}\n    {m.group(2).strip()}")
     return str(final)
-
-
-def clone(record: Base) -> Base:
-    make_transient(record)
-
-    pk_cols = list(record.__table__.primary_key.columns)
-    for col in pk_cols:
-        setattr(record, col.name, None)
-
-    return record

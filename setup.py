@@ -11,7 +11,7 @@ with open(path.join(here, "README.md"), encoding="utf-8") as f:
 setup(
     name="sqlhandler",
     version=__version__,
-    description="[short_project_description]",
+    description="Sql handler class controlling sqlalchemy resources and granting access to sqlalchemy object subclasses with additional convenience methods.",
     long_description=long_description,
     long_description_content_type="text/markdown",
     url="https://github.com/matthewgdv/sqlhandler",
@@ -23,7 +23,14 @@ setup(
     ],
     packages=find_packages(exclude=["tests*"]),
     install_requires=[
-
+        "maybe-else",
+        "numpy",
+        "pandas",
+        "pathmagic",
+        "pymiscutils",
+        "pysubtypes",
+        "sqlalchemy",
+        "sqlparse"
     ],
     author="Matt GdV",
     author_email="matthewgdv@gmail.com"

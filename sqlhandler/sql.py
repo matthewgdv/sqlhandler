@@ -8,15 +8,15 @@ from typing import Any, Set, Dict, Union, TYPE_CHECKING
 import numpy as np
 import pandas as pd
 import sqlalchemy as alch
-from sqlalchemy.orm import aliased, backref, relationship
+from sqlalchemy.orm import backref, relationship
 
-from subtypes import Frame
+from subtypes import Frame, Enum
 from pathmagic import File
 from miscutils.serializer import LostObject
 
-from .custom import Base, Query, Session, StringLiteral, BitLiteral
+from .custom import Model, Query, Session, StringLiteral, BitLiteral
 from .expression import Select, Update, Insert, Delete, SelectInto
-from .utils import StoredProcedure, Script, clone
+from .utils import StoredProcedure, Script
 from .log import SqlLog
 from .database import Database
 from .config import Config
@@ -32,8 +32,11 @@ class Sql:
     The custom query class provided by the Alchemy object's 'session' attribute also has additional methods. Many commonly used sqlalchemy objects are bound to this object as attributes for easy access.
     """
 
-    def __init__(self, host: str = None, database: str = None, log: File = None, autocommit: bool = False) -> None:
-        self.engine = self._create_engine(host=host, database=database)
+    class IfExists(Enum):
+        FAIL, REPLACE, APPEND = "fail", "replace", "append"
+
+    def __init__(self, host: str = None, database: str = None, log: File = None, autocommit: bool = False, global_config: bool = False) -> None:
+        self.engine = self._create_engine(host=host, database=database, global_config=global_config)
         self.session = Session(self.engine, sql=self)
 
         self.database = Database(self)
@@ -44,13 +47,11 @@ class Sql:
         self.Insert, self.Delete = Insert.from_sql(self), Delete.from_sql(self)
         self.StoredProcedure, self.Script = StoredProcedure.from_sql(self), Script.from_sql(self)
 
-        self.text, self.literal, self.clone, self.alias = alch.text, alch.literal, clone, aliased
-        self.AND, self.OR, self.CAST, self.CASE = alch.and_, alch.or_, alch.cast, alch.case
+        self.text, self.literal = alch.text, alch.literal
+        self.AND, self.OR, self.CAST, self.CASE, self.TRUE, self.FALSE = alch.and_, alch.or_, alch.cast, alch.case, alch.true(), alch.false()
 
-        self.Table, self.Column, self.ForeignKey, self.Relationship, self.Backref = alch.Table, alch.Column, alch.ForeignKey, relationship, backref
+        self.Table, self.Column, self.Relationship, self.Backref, self.ForeignKey, self.Index, self.CheckConstraint = alch.Table, alch.Column, relationship, backref, alch.ForeignKey, alch.Index, alch.CheckConstraint
         self.type, self.func, self.sqlalchemy = alch.types, alch.func, alch
-
-        pd.set_option("max_columns", None)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(engine={repr(self.engine)}, database={repr(self.database)})"
@@ -75,7 +76,7 @@ class Sql:
         self.__dict__ = attrs
 
     @property
-    def Model(self) -> Base:
+    def Model(self) -> Model:
         return self.database.declaration
 
     @property
@@ -126,27 +127,34 @@ class Sql:
         """Reads the target table or view (from the specified schema) into a pandas DataFrame."""
         return Frame(pd.read_sql_table(table, self.engine, schema=schema))
 
-    def excel_to_table(self, filepath: os.PathLike, table: str = "temp", schema: str = None, if_exists: str = "fail", primary_key: str = "id", identity: bool = True, **kwargs: Any) -> Base:
+    def excel_to_table(self, filepath: os.PathLike, table: str = "temp", schema: str = None, if_exists: str = "fail", primary_key: str = "id", identity: bool = True, **kwargs: Any) -> Model:
         """Bulk insert the contents of the target '.xlsx' file to the specified table."""
         return self.frame_to_table(dataframe=Frame.from_excel(filepath, **kwargs), table=table, schema=schema, if_exists=if_exists, primary_key=primary_key, identity=identity)
 
-    def frame_to_table(self, dataframe: pd.DataFrame, table: str, schema: str = None, if_exists: str = "fail", primary_key: str = "id", identity: bool = True) -> Base:
+    def frame_to_table(self, dataframe: pd.DataFrame, table: str, schema: str = None, if_exists: str = "fail", primary_key: str = "id") -> Model:
         """Bulk insert the contents of a pandas DataFrame to the specified table."""
-        if primary_key is not None:
-            if identity:
+        dataframe = Frame(dataframe)
+
+        has_identity_pk = False
+        if primary_key is None:
+            dataframe.reset_index(inplace=True)
+            primary_key = dataframe.iloc[:, 0].name
+        else:
+            if primary_key in dataframe.columns:
+                dataframe.set_index(primary_key, inplace=True)
+            else:
+                has_identity_pk = True
                 dataframe.reset_index(inplace=True, drop=True)
                 dataframe.index.names = [primary_key]
                 dataframe.index += 1
-                dataframe.reset_index(inplace=True)
-            else:
-                dataframe.index.names = [primary_key]
-                dataframe.reset_index(inplace=True)
+
+            dataframe.reset_index(inplace=True)
 
         dtypes = self._sql_dtype_dict_from_frame(dataframe)
-        if primary_key is not None and identity:
+        if has_identity_pk:
             dtypes.update({primary_key: alch.types.INT})
 
-        dataframe.infer_dtypes().to_sql(engine=self.engine, name=table, if_exists=if_exists, index=False, index_label=None, primary_key=primary_key, schema=schema, dtype=dtypes)
+        dataframe.to_sql(engine=self.engine, name=table, if_exists=if_exists, index=False, index_label=None, primary_key=primary_key, schema=schema, dtype=dtypes)
 
         table_object = self.orm[schema][table]
         self.refresh_table(table=table_object)
@@ -166,15 +174,15 @@ class Sql:
 
         return Frame(vals, columns=cols)
 
-    def create_table(self, table: Union[Base, alch.schema.Table]) -> None:
+    def create_table(self, table: Union[Model, alch.schema.Table]) -> None:
         """Drop a table or the table belonging to an ORM class and remove it from the metadata."""
         self.database.create_table(table)
 
-    def drop_table(self, table: Union[Base, alch.schema.Table]) -> None:
+    def drop_table(self, table: Union[Model, alch.schema.Table]) -> None:
         """Drop a table or the table belonging to an ORM class and remove it from the metadata."""
         self.database.drop_table(table)
 
-    def refresh_table(self, table: Union[Base, alch.schema.Table]) -> None:
+    def refresh_table(self, table: Union[Model, alch.schema.Table]) -> None:
         self.database.refresh_table(table=table)
 
     def clear_metadata(self) -> None:
@@ -182,8 +190,8 @@ class Sql:
 
     # Private internal methods
 
-    def _create_engine(self, host: str, database: str) -> alch.engine.base.Engine:
-        url = Config().generate_url(host=host, database=database)
+    def _create_engine(self, host: str, database: str, global_config: bool) -> alch.engine.base.Engine:
+        url = Config(global_config=global_config).generate_url(host=host, database=database)
         return alch.create_engine(str(url), echo=False, dialect=self._create_literal_dialect(url.get_dialect()))
 
     def _create_literal_dialect(self, dialect_class: alch.engine.default.DefaultDialect) -> alch.engine.default.DefaultDialect:
@@ -212,16 +220,19 @@ class Sql:
         def sqlalchemy_dtype_from_series(series: pd.code.series.Series) -> Any:
             if series.dtype.name in ["int64", "Int64"]:
                 nums = [num for num in series if not isnull(num)]
-                minimum, maximum = min(nums), max(nums)
-
-                if 0 <= minimum and maximum <= 255:
-                    return alch.dialects.mssql.TINYINT
-                elif -2**15 <= minimum and maximum <= 2**15:
-                    return alch.types.SMALLINT
-                elif -2**31 <= minimum and maximum <= 2**31:
-                    return alch.types.INT
+                if not nums:
+                    return alch.types.Integer
                 else:
-                    return alch.types.BIGINT
+                    minimum, maximum = min(nums), max(nums)
+
+                    if 0 <= minimum and maximum <= 255:
+                        return alch.dialects.mssql.TINYINT
+                    elif -2**15 <= minimum and maximum <= 2**15:
+                        return alch.types.SmallInteger
+                    elif -2**31 <= minimum and maximum <= 2**31:
+                        return alch.types.Integer
+                    else:
+                        return alch.types.BigInteger
             elif series.dtype.name == "object":
                 return alch.types.String(int((series.fillna("").astype(str).str.len().max()//50 + 1)*50))
             else:

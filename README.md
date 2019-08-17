@@ -1,7 +1,55 @@
 Overview
 ====================
 
-[overview]
+Provides a thick wrapper around some SQLAlchemy operations with lots of conveniences:
+
+The `Sql` class
+--------------------
+* Central handler class
+* Automatically start connections based on prior configuration
+* Preconfigured SQLAlchemy `Session` subclass bound which produces special `Query` objects with its `Session.query()` method.
+* Unique `Database` object bound to its `Sql.database` attribute, which manages the SQLAlchemy `MetaData`, `DeclarativeBase`, and `AutomapBase` objects
+* Produce a pre-configured alembic `Operations` object for simple programmatic migrations
+* Create a table from a Pandas `DataFrame` or subtypes `Frame`, with an autoincrementing primary key
+* Log class that captures raw SQL with inline literal binds from custom expression classes (`Select`, `Insert`, `Update`, `Delete`) when activated
+* Create and drop table operations that work on mapped classes and raw tables, which update the metadata and database accessors to keep everything in sync
+* Provides access to the most common parts of the SQLAlchemy API
+
+The `Config` class
+--------------------
+* Simple API for configuring database URLs that can be easily reused
+* When Providing a default host and database, `Sql` will no longer require arguments when connecting
+* Add or remove config programatically as well as by importing/exporting JSON files
+
+The `Model` class
+--------------------
+* A SQLAlchemy declarative base with a few utility methods
+* `Model.insert()`, `Model.update()`, and `Model.delete()` will perform the respective operations within their bound session
+* `Model.frame()` converts a record to a `subtypes.Frame` with a single row
+* Other classmethods: `Model.create()`, `Model.drop()`, `Model.query()`, `Model.join()` (for cleaner joins in expression constructs), `Model.c()` (easier access to the table
+  columns), and `Model.alias()`
+
+The `Query` class
+--------------------
+* Alias methods `Query.from_()` (`Query.select_from()`), `Query.where()` (`Query.filter()`), `Query.set_()` (`Query.update()`, with automatic 'fetch' behaviour)
+* `Query.frame()` method for conversion to `subtypes.Frame`
+* `Query.scalar_col()` method for conversion of a single column to a `list`
+* Implemented string magic method producing the query with inline literal binds
+
+The `Database` class
+--------------------
+* `Database.orm` and `Database.objects` attributes can be used to access database objects via attribute access (eg `Database.orm.log.main`)
+* `Database.orm` yields mapped classes, but only for database objects with a primary key
+* `Database.objects` yields raw table objects, and should allow access to any database object, even those without a primary key, views, etc.
+* Database reflection occurs automatically when attempting to access a schema or database object using these accessors
+* The `MetaData` is automatically cached for 5 days after each reflection operation, causing the `Database` object to start with pre-populated schemas on subsequent instanciation
+
+Custom expression classes
+--------------------
+* `Select`, `Update`, `Insert`, and `Delete` subclasses with various extra methods
+* `.resolve()` method facilitates performing queries with user interaction
+
+
 
 Installation
 ====================
