@@ -9,6 +9,7 @@ import numpy as np
 import pandas as pd
 import sqlalchemy as alch
 from sqlalchemy.orm import backref, relationship
+import pyodbc
 
 from subtypes import Frame, Enum
 from pathmagic import File
@@ -23,6 +24,8 @@ from .config import Config
 
 if TYPE_CHECKING:
     import alembic
+
+assert pyodbc
 
 
 class Sql:
