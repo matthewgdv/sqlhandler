@@ -68,7 +68,7 @@ class StoredProcedure(Executable):
         self.name, self.schema = name, schema
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(name={self.name}, schema={self.schema}, args={self.args}, kwargs={self.kwargs})"
+        return f"{type(self).__name__}(name={self.name}, schema={self.schema})"
 
     def _compile_sql(self, *args: Any, **kwargs: Any) -> Frame:
         mappings = {
