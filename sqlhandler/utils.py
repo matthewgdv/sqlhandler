@@ -32,91 +32,32 @@ class SqlBoundMixin:
 class Executable(SqlBoundMixin, ABC):
     def __init__(self, sql: Sql = None) -> None:
         self.sql = sql
-        self.cursor = self.sql.engine.raw_connection().cursor()
-        self.args, self.kwargs = (), {}
-
-        self.exception: Exception = None
-        self.exceptions: List[Exception] = []
-        self.result: List[Frame] = None
         self.results: List[List[Frame]] = []
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
-        self.args, self.kwargs = args, kwargs
-        return self
-
-    def __bool__(self) -> bool:
-        return self.exception is None
-
-    def __enter__(self) -> Executable:
-        self.execute(*self.args, **self.kwargs)
-        return self
-
-    def __exit__(self, ex_type: Any, ex_value: Any, ex_traceback: Any) -> None:
-        if ex_type is not None:
-            self.rollback()
-        else:
-            if self._trancount() > 0:
-                if self:
-                    self.commit()
-                else:
-                    self.rollback()
-                    raise self.exception
-            else:
-                if self.result is not None or self.exception is not None:
-                    self._archive_results_and_exceptions()
+        return self.execute(*args, **kwargs)
 
     def execute(self, *args: Any, **kwargs: Any) -> Frame:
-        result = None
-        try:
-            statement, sql_args = self._compile_sql(*args, **kwargs)
-            result = self.cursor.execute(statement, *sql_args)
-        except Exception as ex:
-            self.exception = ex
-
-        self.result = self._get_frames_from_result(result) if result is not None else None
-        return self.result
-
-    def commit(self) -> None:
-        while self._trancount() > 0:
-            self.cursor.commit()
-
-        self._archive_results_and_exceptions()
-
-    def rollback(self) -> None:
-        while self._trancount() > 0:
-            self.cursor.rollback()
-
-        self._archive_results_and_exceptions()
-
-    def _reset_transactional_state(self) -> None:
-        while self._trancount() > 0:
-            self.cursor.rollback()
-
-    def _archive_results_and_exceptions(self) -> None:
-        self.results.append(self.result)
-        self.result = None
-
-        self.exceptions.append(self.exception)
-        self.exception = None
+        statement, bindparams = self._compile_sql(*args, **kwargs)
+        result = self.sql.session.execute(statement, bindparams)
+        self.results.append(self._get_frames_from_cursor(result.cursor) if result is not None else None)
+        return self.results[-1]
 
     @abstractmethod
     def _compile_sql(self, *args: Any, **kwargs: Any) -> None:
         pass
 
-    def _trancount(self) -> int:
-        return self.cursor.execute("SELECT @@TRANCOUNT").fetchall()[0][0]
-
     @staticmethod
-    def _get_frames_from_result(result: Any) -> List[Frame]:
-        def get_frame_from_result(result: Any) -> Frame:
+    def _get_frames_from_cursor(cursor: Any) -> List[Frame]:
+        def get_frame_from_cursor(cursor: Any) -> Frame:
             try:
-                return Frame([tuple(row) for row in result.fetchall()], columns=[info[0] for info in result.description])
+                return Frame([tuple(row) for row in cursor.fetchall()], columns=[info[0] for info in cursor.description])
             except Exception:
                 return None
 
-        data = [get_frame_from_result(result)]
-        while result.nextset():
-            data.append(get_frame_from_result(result))
+        data = [get_frame_from_cursor(cursor)]
+        while cursor.nextset():
+            data.append(get_frame_from_cursor(cursor))
 
         return [frame for frame in data if frame is not None]
 
@@ -130,7 +71,11 @@ class StoredProcedure(Executable):
         return f"{type(self).__name__}(name={self.name}, schema={self.schema}, args={self.args}, kwargs={self.kwargs})"
 
     def _compile_sql(self, *args: Any, **kwargs: Any) -> Frame:
-        return (f"EXEC {self.schema}.{self.name} {', '.join(list('?'*len(args)) + [f'@{arg}=?' for arg in kwargs.keys()])};", [*args, *list(kwargs.values())])
+        mappings = {
+            **{f"boundarg{index + 1}": {"bind": f":boundarg{index + 1}", "val": val} for index, val in enumerate(args)},
+            **{f"boundkwarg{index + 1}": {"bind": f"@{name}=:boundkwarg{index + 1}", "val": val} for index, (name, val) in enumerate(kwargs.items())}
+        }
+        return (f"EXEC [{self.schema}].[{self.name}] {', '.join([arg['bind'] for arg in mappings.values()])}", {name: arg["val"] for name, arg in mappings.items()})
 
 
 class Script(Executable):
@@ -139,10 +84,10 @@ class Script(Executable):
         self.file = File.from_pathlike(path)
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(file={self.name})"
+        return f"{type(self).__name__}(file={self.file})"
 
     def _compile_sql(self, *args: Any, **kwargs: Any) -> Frame:
-        return (self.file.contents, [])
+        return (self.file.contents, {})
 
 
 class TempManager:
