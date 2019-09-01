@@ -9,7 +9,7 @@ from sqlalchemy.ext.declarative import declarative_base
 
 from maybe import Maybe
 from subtypes import Str
-from miscutils import NameSpaceObject, Cache
+from miscutils import NameSpace, Cache
 
 from .appdata import appdata
 from .custom import Model
@@ -109,7 +109,7 @@ class Database:
         return str(Str(referred_name).case.snake().case.plural())
 
 
-class Schemas(NameSpaceObject):
+class Schemas(NameSpace):
     def __init__(self, database: Database) -> None:
         super().__init__()
         self._database = database
@@ -140,7 +140,7 @@ class Schemas(NameSpaceObject):
             self[name] = Schema(database=self._database, name=name, tables=tables)
 
 
-class Schema(NameSpaceObject):
+class Schema(NameSpace):
     def __init__(self, database: Database, name: str, tables: list) -> None:
         super().__init__({Maybe(table).__table__.else_(table).name: table for table in tables})
         self._database, self._name = database, name

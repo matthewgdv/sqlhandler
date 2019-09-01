@@ -194,7 +194,7 @@ class Sql:
     # Private internal methods
 
     def _create_engine(self, host: str, database: str, global_config: bool) -> alch.engine.base.Engine:
-        url = Config(global_config=global_config).generate_url(host=host, database=database)
+        url = Config(systemwide=global_config).generate_url(host=host, database=database)
         return alch.create_engine(str(url), echo=False, dialect=self._create_literal_dialect(url.get_dialect()))
 
     def _create_literal_dialect(self, dialect_class: alch.engine.default.DefaultDialect) -> alch.engine.default.DefaultDialect:
