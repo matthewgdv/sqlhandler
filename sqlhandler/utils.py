@@ -37,11 +37,14 @@ class Executable(SqlBoundMixin, ABC):
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self.execute(*args, **kwargs)
 
-    def execute(self, *args: Any, **kwargs: Any) -> Frame:
+    def execute(self, *args: Any, **kwargs: Any) -> List[Frame]:
         statement, bindparams = self._compile_sql(*args, **kwargs)
-        result = self.sql.session.execute(statement, bindparams)
-        self.results.append(self._get_frames_from_cursor(result.cursor) if result is not None else None)
-        return self.results[-1]
+        cursor = self.sql.session.execute(statement, bindparams).cursor
+        if cursor is None:
+            return None
+        else:
+            self.results.append(self._get_frames_from_cursor(cursor))
+            return self.results[-1]
 
     @abstractmethod
     def _compile_sql(self, *args: Any, **kwargs: Any) -> None:
@@ -59,13 +62,13 @@ class Executable(SqlBoundMixin, ABC):
         while cursor.nextset():
             data.append(get_frame_from_cursor(cursor))
 
-        return [frame for frame in data if frame is not None]
+        return [frame for frame in data if frame is not None] or None
 
 
 class StoredProcedure(Executable):
-    def __init__(self, name: str, schema: str = "dbo", sql: Sql = None) -> None:
+    def __init__(self, name: str, schema: str = "dbo", database: str = None, sql: Sql = None) -> None:
         super().__init__(sql=sql)
-        self.name, self.schema = name, schema
+        self.name, self.schema, self.database = name, schema, database
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name={self.name}, schema={self.schema})"
@@ -75,7 +78,8 @@ class StoredProcedure(Executable):
             **{f"boundarg{index + 1}": {"bind": f":boundarg{index + 1}", "val": val} for index, val in enumerate(args)},
             **{f"boundkwarg{index + 1}": {"bind": f"@{name}=:boundkwarg{index + 1}", "val": val} for index, (name, val) in enumerate(kwargs.items())}
         }
-        return (f"EXEC [{self.schema}].[{self.name}] {', '.join([arg['bind'] for arg in mappings.values()])}", {name: arg["val"] for name, arg in mappings.items()})
+        proc_name = f"EXEC {f'[{self.database}].' if self.database is not None else ''}[{self.schema}].[{self.name}]"
+        return (f"{proc_name} {', '.join([arg['bind'] for arg in mappings.values()])}", {name: arg["val"] for name, arg in mappings.items()})
 
 
 class Script(Executable):
