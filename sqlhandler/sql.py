@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from typing import Any, Set, Dict, Union, TYPE_CHECKING
+from typing import Any, Dict, Union, TYPE_CHECKING
 
 
 import numpy as np
