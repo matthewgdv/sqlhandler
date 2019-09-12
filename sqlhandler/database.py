@@ -78,7 +78,8 @@ class Database:
     def _add_schema_to_namespaces(self, schema: str) -> None:
         schema = None if schema == "dbo" else schema
 
-        new_meta = copy.deepcopy(self.meta)
+        new_meta = copy.copy(self.meta)
+        # new_meta = copy.deepcopy(self.meta)
         invalid_tables = ({table for table in new_meta.tables if new_meta.tables[table].schema is not None}
                           if schema is None else
                           {table for table in new_meta.tables if new_meta.tables[table].schema is None or new_meta.tables[table].schema.lower() != schema})
