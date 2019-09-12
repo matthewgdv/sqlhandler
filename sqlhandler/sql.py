@@ -19,7 +19,7 @@ from .custom import Model, Query, Session, StringLiteral, BitLiteral
 from .expression import Select, Update, Insert, Delete, SelectInto
 from .utils import StoredProcedure, Script
 from .log import SqlLog
-from .database import Database
+from .database import Database, Schemas
 from .config import Config
 
 if TYPE_CHECKING:
@@ -83,11 +83,11 @@ class Sql:
         return self.database.declaration
 
     @property
-    def orm(self) -> Set[str]:
+    def orm(self) -> Schemas:
         return self.database.orm
 
     @property
-    def objects(self) -> Set[str]:
+    def objects(self) -> Schemas:
         return self.database.objects
 
     @property
