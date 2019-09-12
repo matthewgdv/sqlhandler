@@ -198,6 +198,8 @@ class Sql:
         return alch.create_engine(str(url), echo=False, dialect=self._create_literal_dialect(url.get_dialect()))
 
     def _create_literal_dialect(self, dialect_class: alch.engine.default.DefaultDialect) -> alch.engine.default.DefaultDialect:
+        from sqlalchemy.dialects.mssql import dialect as mssql
+
         class LiteralDialect(dialect_class):
             supports_multivalues_insert = True
 
@@ -209,9 +211,11 @@ class Sql:
                         alch.sql.sqltypes.DateTime: StringLiteral,
                         alch.sql.sqltypes.Date: StringLiteral,
                         alch.sql.sqltypes.NullType: StringLiteral,
-                        alch.dialects.mssql.BIT: BitLiteral
                     }
                 )
+
+                if dialect_class is mssql:
+                    self.colspecs.update({alch.dialects.mssql.BIT: BitLiteral})
 
         return LiteralDialect()
 
