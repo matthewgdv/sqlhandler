@@ -130,9 +130,9 @@ class Sql:
         """Reads the target table or view (from the specified schema) into a pandas DataFrame."""
         return Frame(pd.read_sql_table(table, self.engine, schema=schema))
 
-    def excel_to_table(self, filepath: os.PathLike, table: str = "temp", schema: str = None, if_exists: str = "fail", primary_key: str = "id", identity: bool = True, **kwargs: Any) -> Model:
+    def excel_to_table(self, filepath: os.PathLike, table: str = "temp", schema: str = None, if_exists: str = "fail", primary_key: str = "id", **kwargs: Any) -> Model:
         """Bulk insert the contents of the target '.xlsx' file to the specified table."""
-        return self.frame_to_table(dataframe=Frame.from_excel(filepath, **kwargs), table=table, schema=schema, if_exists=if_exists, primary_key=primary_key, identity=identity)
+        return self.frame_to_table(dataframe=Frame.from_excel(filepath, **kwargs), table=table, schema=schema, if_exists=if_exists, primary_key=primary_key)
 
     def frame_to_table(self, dataframe: pd.DataFrame, table: str, schema: str = None, if_exists: str = "fail", primary_key: str = "id") -> Model:
         """Bulk insert the contents of a pandas DataFrame to the specified table."""
