@@ -76,10 +76,9 @@ class Database:
         self.declaration.sql = self.sql
 
     def _add_schema_to_namespaces(self, schema: str) -> None:
-        schema = None if schema == "dbo" else schema
+        schema = None if schema == self.sql.engine.default_schema_name else schema
 
         new_meta = copy.copy(self.meta)
-        # new_meta = copy.deepcopy(self.meta)
         invalid_tables = ({table for table in new_meta.tables if new_meta.tables[table].schema is not None}
                           if schema is None else
                           {table for table in new_meta.tables if new_meta.tables[table].schema is None or new_meta.tables[table].schema.lower() != schema})
@@ -119,10 +118,7 @@ class Schemas(NameSpace):
         return f"""{type(self).__name__}(num_schemas={len(self)}, schemas=[{", ".join([f"{type(schema).__name__}(name='{schema._name}', tables={len(schema)})" for name, schema in self])}])"""
 
     def __getitem__(self, name: str) -> Schema:
-        if name is None:
-            return self.dbo
-        else:
-            return super().__getitem__(name)
+        return self.dbo if name is None else super().__getitem__(name)
 
     def __getattr__(self, attr: str) -> Schema:
         if not attr.startswith("_"):
@@ -134,7 +130,7 @@ class Schemas(NameSpace):
             raise AttributeError(f"{type(self._database).__name__} '{self._database.name}' has no schema '{attr}'.")
 
     def _add_schema(self, name: str, tables: list) -> None:
-        name = Maybe(name).else_("dbo")
+        name = Maybe(name).else_(self._database.sql.engine.default_schema_name)
         if name in self:
             self[name]._refresh_from_tables(tables)
         else:
