@@ -67,10 +67,7 @@ class Sql:
         return self
 
     def __exit__(self, ex_type: Any, ex_value: Any, ex_traceback: Any) -> None:
-        if ex_type is None:
-            self.session.commit()
-        else:
-            self.session.rollback()
+        self.session.commit() if ex_type is None else self.session.rollback()
 
     def __getstate__(self) -> dict:
         return {"engine": LostObject(self.engine), "database": LostObject(self.database), "autocommit": self.autocommit, "_log": self.log}

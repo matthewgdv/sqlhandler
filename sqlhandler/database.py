@@ -76,7 +76,7 @@ class Database:
         self.declaration.sql = self.sql
 
     def _add_schema_to_namespaces(self, schema: str) -> None:
-        schema = None if schema == self.sql.engine.default_schema_name else schema
+        schema = None if schema == self.sql.engine.dialect.default_schema_name else schema
 
         new_meta = copy.copy(self.meta)
         invalid_tables = ({table for table in new_meta.tables if new_meta.tables[table].schema is not None}
@@ -130,7 +130,7 @@ class Schemas(NameSpace):
             raise AttributeError(f"{type(self._database).__name__} '{self._database.name}' has no schema '{attr}'.")
 
     def _add_schema(self, name: str, tables: list) -> None:
-        name = Maybe(name).else_(self._database.sql.engine.default_schema_name)
+        name = Maybe(name).else_(self._database.sql.engine.dialect.default_schema_name)
         if name in self:
             self[name]._refresh_from_tables(tables)
         else:
