@@ -120,7 +120,7 @@ class Query(alch.orm.Query):
         """Execute the query and return the result as a pandas DataFrame."""
         return self.sql.query_to_frame(self, *args, **kwargs)
 
-    def scalar_col(self) -> list:
+    def vector(self) -> list:
         """Transpose all records in a single column into a list. If the query returns more than one column, this will raise a RuntimeError."""
         vals = self.all()
         if all([len(row) == 1 for row in vals]):
