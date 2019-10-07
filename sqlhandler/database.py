@@ -11,7 +11,6 @@ from maybe import Maybe
 from subtypes import Str
 from miscutils import NameSpace, Cache
 
-from .appdata import appdata
 from .custom import Model
 
 if TYPE_CHECKING:
@@ -20,7 +19,7 @@ if TYPE_CHECKING:
 
 class Database:
     def __init__(self, sql: Sql) -> None:
-        self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=appdata.newfile("sql_cache", "pkl"), days=5)
+        self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=sql.config.appdata.newfile("sql_cache", "pkl"), days=5)
         self.meta = self._get_metadata()
         self.declaration = self.reflection = None  # type: Model
         self.orm, self.objects = Schemas(database=self), Schemas(database=self)
