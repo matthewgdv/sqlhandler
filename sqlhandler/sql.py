@@ -38,9 +38,9 @@ class Sql:
     class IfExists(Enum):
         FAIL, REPLACE, APPEND = "fail", "replace", "append"
 
-    def __init__(self, host: str = None, database: str = None, log: File = None, autocommit: bool = False) -> None:
+    def __init__(self, connection: str = None, database: str = None, log: File = None, autocommit: bool = False) -> None:
         self.config = Config()
-        self.engine = self._create_engine(host=host, database=database)
+        self.engine = self._create_engine(connection=connection, database=database)
         self.session = Session(self.engine, sql=self)
 
         self.database = Database(self)
@@ -191,8 +191,8 @@ class Sql:
 
     # Private internal methods
 
-    def _create_engine(self, host: str, database: str) -> alch.engine.base.Engine:
-        url = self.config.generate_url(host=host, database=database)
+    def _create_engine(self, connection: str, database: str) -> alch.engine.base.Engine:
+        url = self.config.generate_url(connection=connection, database=database)
         return alch.create_engine(str(url), echo=False, dialect=self._create_literal_dialect(url.get_dialect()))
 
     def _create_literal_dialect(self, dialect_class: alch.engine.default.DefaultDialect) -> alch.engine.default.DefaultDialect:
