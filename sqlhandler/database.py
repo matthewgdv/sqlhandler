@@ -23,7 +23,7 @@ class Database:
         self.meta = self._get_metadata()
         self.declaration = self.reflection = None  # type: Model
         self.orm, self.objects = Schemas(database=self), Schemas(database=self)
-        self.default_schema_name = vars(self.sql.engine.dialect).get("default_schema_name", "default")
+        self.default_schema_name = vars(self.sql.engine.dialect).get("schema_name", "default")
 
         self._refresh_declarative_base()
         for schema in {self.meta.tables[table].schema for table in self.meta.tables}:
