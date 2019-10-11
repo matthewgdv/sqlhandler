@@ -18,7 +18,7 @@ class SqlLog(PrintLog):
         if self.active:
             super().deactivate()
             if openfile:
-                self.open()
+                self.start()
 
     def write_comment(self, text: str, single_line_comment_cutoff: int = 5, add_newlines: int = 2) -> None:
         if not self.active or self.to_console:
