@@ -30,9 +30,10 @@ assert pyodbc
 
 class Sql:
     """
-    Provides access to the complete sqlalchemy API, with custom functionality added for logging and pandas integration. Handles authentication through config settings and relects all schemas passed to the constructor.
+    Provides access to the complete sqlalchemy API, with custom functionality added for logging and pandas integration. Handles authentication through config settings.
     The custom expression classes provided have additional useful methods and are modified by the 'autocommit' attribute to facilitate human-supervised queries.
     The custom query class provided by the Alchemy object's 'session' attribute also has additional methods. Many commonly used sqlalchemy objects are bound to this object as attributes for easy access.
+    The 'Sql.orm' and 'Sql.objects' attributes provide access via attribute or item access to the reflected database models and underlying table objects, respectively.
     """
 
     class IfExists(Enum):
@@ -78,18 +79,22 @@ class Sql:
 
     @property
     def Model(self) -> Model:
+        """Custom base class for declarative and automap bases to inherit from. Represents a mapped table in a sql database."""
         return self.database.declaration
 
     @property
     def orm(self) -> Schemas:
+        """Property controlling access to mapped models. Models will only appear for tables that have a primary key, and never for views. Schemas must be accessed before tables: E.g. Sql().orm.some_schema.some_table"""
         return self.database.orm
 
     @property
     def objects(self) -> Schemas:
+        """Property controlling access to raw database objects. Schemas must be accessed before tables: E.g. Sql().orm.some_schema.some_table"""
         return self.database.objects
 
     @property
     def operations(self) -> alembic.operations.Operations:
+        """Property controlling access to alembic operations."""
         from alembic.migration import MigrationContext
         from alembic.operations import Operations
 
@@ -97,6 +102,7 @@ class Sql:
 
     @property
     def log(self) -> SqlLog:
+        """Property controlling access to a special SqlLog class. When setting, a simple file path should be used and an appropriate SqlLog will be created."""
         return self._log
 
     @log.setter
@@ -184,9 +190,11 @@ class Sql:
         self.database.drop_table(table)
 
     def refresh_table(self, table: Union[Model, alch.schema.Table]) -> None:
+        """Refresh the schema of the table passed by reflecting the database definition again."""
         self.database.refresh_table(table=table)
 
     def clear_metadata(self) -> None:
+        """Clear the metadata held by this Sql object's database."""
         self.database.clear()
 
     # Private internal methods

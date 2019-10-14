@@ -18,6 +18,8 @@ if TYPE_CHECKING:
 
 
 class Database:
+    """A class representing a sql database. Abstracts away database reflection and metadata caching. The cache lasts for 5 days but can be cleared with Database.clear()"""
+
     def __init__(self, sql: Sql) -> None:
         self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=sql.config.appdata.new_file("sql_cache", "pkl"), days=5)
         self.meta = self._get_metadata()
@@ -33,6 +35,7 @@ class Database:
         return f"{type(self).__name__}(name={repr(self.name)}, orm={repr(self.orm)}, objects={repr(self.objects)}, cache={repr(self.cache)})"
 
     def reflect(self, schema: str = None) -> None:
+        """Reflect the schema with the given name and refresh the 'Database.orm' and 'Database.objects' namespaces."""
         schema = None if schema == self.default_schema_name else schema
 
         self.meta.reflect(schema=schema, views=True)
@@ -42,11 +45,13 @@ class Database:
         self.cache[self.name] = self.meta
 
     def create_table(self, table: alch.schema.Table) -> None:
+        """Emit a create table statement to the database from the given table object."""
         table = self._normalize_table(table)
         table.create()
         self.reflect(table.schema)
 
     def drop_table(self, table: alch.schema.Table) -> None:
+        """Emit a drop table statement to the database for the given table object."""
         table = self._normalize_table(table)
         table.drop()
 
@@ -57,6 +62,7 @@ class Database:
         self.cache[self.name] = self.meta
 
     def refresh_table(self, table: alch.schema.Table) -> None:
+        """Reflect the given table object again."""
         table = self._normalize_table(table)
 
         self.meta.remove(table)
@@ -66,6 +72,7 @@ class Database:
         self.reflect(table.schema)
 
     def clear(self) -> None:
+        """Clear this database's metadata as well as its cache."""
         self.meta.clear()
         self.cache[self.name] = self.meta
         for namespace in (self.orm, self.objects):
@@ -110,6 +117,8 @@ class Database:
 
 
 class Schemas(NameSpace):
+    """A NameSpace class representing a set of database schemas. Individual schemas can be accessed with either attribute or item access. If a schema isn't already cached an attempt will be made to reflect it."""
+
     def __init__(self, database: Database) -> None:
         super().__init__()
         self._database = database
@@ -138,6 +147,8 @@ class Schemas(NameSpace):
 
 
 class Schema(NameSpace):
+    """A NameSpace class representing a database schema. Models/objects can be accessed with either attribute or item access. If the model/object isn't already cached, an attempt will be made to reflect it."""
+
     def __init__(self, database: Database, name: str, tables: list) -> None:
         super().__init__({Maybe(table).__table__.else_(table).name: table for table in tables})
         self._database, self._name = database, name

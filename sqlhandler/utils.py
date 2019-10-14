@@ -19,6 +19,8 @@ SelfType = TypeVar("SelfType")
 
 
 class SqlBoundMixin:
+    """A mixin class for objects that require a reference to an Sql object in their constructor."""
+
     def __init__(self, *args: Any, sql: Sql = None, **kwargs: Any) -> None:
         self.sql = sql
 
@@ -30,6 +32,8 @@ class SqlBoundMixin:
 
 
 class Executable(SqlBoundMixin, ABC):
+    """An abstract class representing a SQL executable such. Concrete implementations such as scripts or stored procedures must inherit from this. An implementaion of Executable._compile_sql() must be provided."""
+
     def __init__(self, sql: Sql = None) -> None:
         self.sql = sql
         self.results: List[List[Frame]] = []
@@ -38,6 +42,7 @@ class Executable(SqlBoundMixin, ABC):
         return self.execute(*args, **kwargs)
 
     def execute(self, *args: Any, **kwargs: Any) -> List[Frame]:
+        """Execute this executable SQL object. Passes on its args and kwargs to Executable._compile_sql()."""
         statement, bindparams = self._compile_sql(*args, **kwargs)
         cursor = self.sql.session.execute(statement, bindparams).cursor
         if cursor is None:
@@ -66,6 +71,8 @@ class Executable(SqlBoundMixin, ABC):
 
 
 class StoredProcedure(Executable):
+    """A class representing a stored procedure in the database. Can be called to execute the proc. Arguments and keyword arguements will be passed on."""
+
     def __init__(self, name: str, schema: str = "dbo", database: str = None, sql: Sql = None) -> None:
         super().__init__(sql=sql)
         self.name, self.schema, self.database = name, schema, database
@@ -83,6 +90,8 @@ class StoredProcedure(Executable):
 
 
 class Script(Executable):
+    """A class representing a SQL script in the filesystem. Can be called to execute the script."""
+
     def __init__(self, path: PathLike, sql: Sql = None) -> None:
         super().__init__(sql=sql)
         self.file = File.from_pathlike(path)

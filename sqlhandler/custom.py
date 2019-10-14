@@ -9,7 +9,6 @@ from sqlalchemy.sql.base import ImmutableColumnCollection
 from sqlalchemy.dialects.mssql import BIT
 
 from maybe import Maybe
-from subtypes import Frame
 
 from .utils import literalstatement
 
@@ -18,7 +17,7 @@ if TYPE_CHECKING:
 
 
 class Model:
-    """Custom base class for declarative and automap bases to inherit from."""
+    """Custom base class for declarative and automap bases to inherit from. Represents a mapped table in a sql database."""
     sql: Sql
     __table__: alch.Table
     columns: ImmutableColumnCollection
@@ -28,36 +27,46 @@ class Model:
 
     @classmethod
     def alias(cls, name: str, *args: Any, **kwargs: Any) -> AliasedClass:
+        """Create a new class that is an alias of this one, with the given name."""
         return alch.orm.aliased(cls, *args, name=name, **kwargs)
 
     @classmethod
     def join(cls, *args: Any, **kwargs: Any) -> Any:
+        """Create a join between the table belonging to this class and another model."""
         return cls.__table__.join(*args, **kwargs)
 
     @classmethod
     def c(cls, colname: str = None) -> Union[ImmutableColumnCollection, alch.Column]:
+        """Access the columns (or a specific column if 'colname' is specified) of the underlying table."""
         return cls.__table__.c if colname is None else cls.__table__.c[colname]
 
     @classmethod
     def query(cls) -> Query:
+        """Create a new Query operating on this class."""
         return cls.sql.session.query(cls)
 
     @classmethod
     def create(cls) -> None:
+        """Create the table mapped to this class."""
         cls.sql.create_table(cls)
 
     @classmethod
     def drop(cls) -> None:
+        """Drop the table mapped to this class."""
         cls.sql.drop_table(cls)
 
-    def frame(self) -> Frame:
-        return self.sql.orm_to_frame(self)
-
     def insert(self) -> Model:
+        """Emit an insert statement for this object against this model's underlying table."""
         self.sql.session.add(self)
         return self
 
     def update(self, argdeltas: dict = None, **update_kwargs: Any,) -> Model:
+        """
+        Emit an update statement for this object against this model's underlying table.
+        This method positionally accepts a dict where the keys are the model's class attributes (of type InstrumentedAttribute) and the values are the values to update to.
+        Alternatively, if the column names are known they may be set using keyword arguments. Raises AttributeError if invalid keys are provided.
+        If a dict is provided positionally all keyword arguments will be ignored.
+        """
         def ensure_names_are_valid(argnames: list) -> None:
             valid_names = set(vars(type(self)))
             for name in argnames:
@@ -76,10 +85,12 @@ class Model:
         return self
 
     def delete(self) -> Model:
+        """Emit a delete statement for this object against this model's underlying table."""
         self.sql.session.delete(self)
         return self
 
     def clone(self, *args: Any, **kwargs: Any) -> Model:
+        """Create a clone (new primary_key, but copies of all other attributes) of this object in the detached state. Model.insert() will be required to persist it to the database."""
         valid_cols = [col.name for col in self.__table__.columns if col.name not in self.__table__.primary_key.columns]
         return type(self)(**{col: getattr(self, col) for col in valid_cols}).update(*args, **kwargs)
 
@@ -96,6 +107,7 @@ class Session(alch.orm.Session):
         return Query(*args, sql=self.sql)
 
     def execute(self, *args: Any, autocommit: bool = False, **kwargs: Any) -> alch.engine.ResultProxy:
+        """Execute an valid object against this Session. If 'autocommit=True' is passed, the transaction will be commited if the statement completes without errors."""
         res = super().execute(*args, **kwargs)
         if autocommit:
             self.commit()

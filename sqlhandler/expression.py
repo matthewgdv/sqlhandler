@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import Any, List, TYPE_CHECKING
 
-import pandas as pd
 import sqlalchemy as alch
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.ext.compiler import compiles
@@ -20,12 +19,20 @@ if TYPE_CHECKING:
 
 
 class ExpressionMixin:
+    """A mixin providing private methods for logging using expression classes."""
+
+    def execute(self, autocommit: bool = False) -> str:
+        """Execute this query's statement in the current session."""
+        res = self.sql.session.execute(self)
+        if autocommit:
+            self.sql.session.commit()
+        return res
+
     def _prepare_tran(self) -> None:
         self.sql.session.rollback()
         self.sql.log.write(f"{'-' * 200}\n\nBEGIN TRAN;", add_newlines=2)
 
     def _resolve_tran(self, force_commit: bool = False) -> None:
-        """Request user confirmation to resolve the ongoing transaction."""
         if self.sql.autocommit or force_commit:
             self.sql.session.commit()
             self.sql.log.write("COMMIT;", add_newlines=2)
@@ -96,11 +103,12 @@ class Select(alch.sql.Select, SqlBoundMixin):
     def __str__(self) -> str:
         return self.literal()
 
-    def frame(self) -> pd.DataFrame:
-        """Execute the query and return the result as a pandas DataFrame. If the Sql object's 'printing' attribute is True, the statement and returning table will be printed."""
+    def frame(self) -> Frame:
+        """Execute the query and return the result as a subtypes.Frame."""
         return self._select_to_frame()
 
-    def resolve(self) -> pd.DataFrame:
+    def resolve(self) -> Frame:
+        """Convert this query into a subtypes.Frame and write an ascii representation of it to the log, then return it."""
         frame = self._select_to_frame()
         self.sql.log.write(str(self), add_newlines=2)
         self.sql.log.write_comment(frame.applymap(lambda val: 1 if val is True else (0 if val is False else ("NULL" if val is None else val))).to_ascii(), add_newlines=2)
@@ -134,6 +142,7 @@ class Update(alch.sql.Update, SqlBoundMixin, ExpressionMixin):
         return self.literal()
 
     def resolve(self, silently: bool = False) -> None:
+        """Execute this statement with surrounding Select statements as applicable, and request user confirmation to commit if Sql.autocommit is False, else commit the transaction."""
         self._prepare_tran()
         pre_select_object = self._perform_pre_select(silently=silently)
         self._execute_expression_and_determine_rowcount()
@@ -163,6 +172,7 @@ class Insert(alch.sql.Insert, SqlBoundMixin, ExpressionMixin):
         return self.literal()
 
     def resolve(self, silently: bool = False) -> None:
+        """Execute this statement with surrounding Select statements as applicable, and request user confirmation to commit if Sql.autocommit is False, else commit the transaction."""
         self._prepare_tran()
         rowcount = self._perform_pre_select_from_select(silently=silently)
         rowcount = self._execute_expression_and_determine_rowcount(rowcount=rowcount)
@@ -180,6 +190,7 @@ class Insert(alch.sql.Insert, SqlBoundMixin, ExpressionMixin):
             return self._align_values_insert(literal)
 
     def values(self, *args: Any, **kwargs: Any) -> Insert:
+        """Insert the given values as either a single dict, or a list of dicts."""
         ret = super().values(*args, **kwargs)
         if isinstance(ret.parameters, list):
             ret.parameters = [{(col.key if isinstance(col, InstrumentedAttribute) else col): (Maybe(val).else_(alch.null()))
@@ -238,6 +249,7 @@ class Delete(alch.sql.Delete, SqlBoundMixin, ExpressionMixin):
         return self.literal()
 
     def resolve(self, silently: bool = False) -> None:
+        """Execute this statement with surrounding Select statements as applicable, and request user confirmation to commit if Sql.autocommit is False, else commit the transaction."""
         self._prepare_tran()
         self._perform_pre_select(silently=silently)
         self._execute_expression_and_determine_rowcount()
@@ -263,6 +275,7 @@ class SelectInto(alch.sql.Select, SqlBoundMixin, ExpressionMixin):
         return self.literal()
 
     def resolve(self, silently: bool = False) -> None:
+        """Execute this statement with surrounding Select statements as applicable, and request user confirmation to commit if Sql.autocommit is False, else commit the transaction."""
         self._prepare_tran()
         self._execute_expression_and_determine_rowcount()
         self._perform_post_select_all(silently=silently)
@@ -271,13 +284,6 @@ class SelectInto(alch.sql.Select, SqlBoundMixin, ExpressionMixin):
     def literal(self) -> str:
         """Returns this query's statement as raw SQL with inline literal binds."""
         return literalstatement(self)
-
-    def execute(self, autocommit: bool = False) -> str:
-        """Execute this query's statement in the current session."""
-        res = self.sql.session.execute(self)
-        if autocommit:
-            self.sql.session.commit()
-        return res
 
 
 @compiles(SelectInto)  # type:ignore
