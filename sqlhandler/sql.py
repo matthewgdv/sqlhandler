@@ -11,7 +11,7 @@ import sqlalchemy as alch
 from sqlalchemy.orm import backref, relationship
 import pyodbc
 
-from subtypes import Frame, Enum
+from subtypes import Frame, AutoEnum
 from pathmagic import File
 from miscutils.serializer import LostObject
 
@@ -36,8 +36,8 @@ class Sql:
     The 'Sql.orm' and 'Sql.objects' attributes provide access via attribute or item access to the reflected database models and underlying table objects, respectively.
     """
 
-    class IfExists(Enum):
-        FAIL, REPLACE, APPEND = "fail", "replace", "append"
+    class IfExists(AutoEnum):
+        FAIL, REPLACE, APPEND  # noqa
 
     def __init__(self, connection: str = None, database: str = None, log: File = None, autocommit: bool = False) -> None:
         self.config = Config()
