@@ -42,7 +42,7 @@ class Database:
         self._refresh_declarative_base()
         self._add_schema_to_namespaces(schema)
 
-        self.cache[self.name] = self.meta
+        self._cache_metadata()
 
     def create_table(self, table: alch.schema.Table) -> None:
         """Emit a create table statement to the database from the given table object."""
@@ -59,7 +59,7 @@ class Database:
         del self.orm[table.schema][table.name]
         del self.objects[table.schema][table.name]
 
-        self.cache[self.name] = self.meta
+        self._cache_metadata()
 
     def refresh_table(self, table: alch.schema.Table) -> None:
         """Reflect the given table object again."""
@@ -74,7 +74,7 @@ class Database:
     def clear(self) -> None:
         """Clear this database's metadata as well as its cache."""
         self.meta.clear()
-        self.cache[self.name] = self.meta
+        self._cache_metadata()
         for namespace in (self.orm, self.objects):
             namespace._clear()
 
@@ -85,7 +85,7 @@ class Database:
     def _add_schema_to_namespaces(self, schema: str) -> None:
         schema = None if schema == self.default_schema_name else schema
 
-        new_meta = copy.copy(self.meta)
+        new_meta = copy.deepcopy(self.meta)
         invalid_tables = ({table for table in new_meta.tables if new_meta.tables[table].schema is not None}
                           if schema is None else
                           {table for table in new_meta.tables if new_meta.tables[table].schema is None or new_meta.tables[table].schema.lower() != schema})
@@ -109,6 +109,9 @@ class Database:
 
     def _normalize_table(self, table: Union[Model, alch.schema.Table]) -> alch.schema.Table:
         return Maybe(table).__table__.else_(table)
+
+    def _cache_metadata(self) -> None:
+        self.cache[self.name] = self.meta
 
     @staticmethod
     def _pluralize_collection(base: Any, local_cls: Any, referred_cls: Any, constraint: Any) -> str:
