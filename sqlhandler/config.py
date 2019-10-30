@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from maybe import Maybe
 from subtypes import Enum
-import miscutils
+import iotools
 import sqlhandler
 
 from sqlalchemy.engine.url import URL
@@ -20,7 +20,7 @@ class Url(URL):
         super().__init__(drivername=drivername, username=Maybe(username).else_(""), password=password, host=host, port=port, database=database, query=query)
 
 
-class Config(miscutils.Config):
+class Config(iotools.Config):
     """A config class granting access to an os-specific appdata directory for use by this library."""
     Dialect = Dialect
     app_name = sqlhandler.__name__
@@ -28,7 +28,7 @@ class Config(miscutils.Config):
 
     def add_connection(self, connection: str, host: str, drivername: str, default_database: str, username: str = None, password: str = None, port: str = None, query: dict = None, is_default: bool = False) -> None:
         """Add a new connection with the given arguments."""
-        self.data.connections[connection] = miscutils.NameSpaceDict(host=host, drivername=drivername, default_database=default_database, username=username, password=password, port=port, query=query)
+        self.data.connections[connection] = dict(host=host, drivername=drivername, default_database=default_database, username=username, password=password, port=port, query=query)
         if is_default:
             self.set_default_connection(connection=connection)
 

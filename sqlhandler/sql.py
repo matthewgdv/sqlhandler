@@ -13,7 +13,7 @@ import pyodbc
 
 from subtypes import Frame, AutoEnum
 from pathmagic import File
-from miscutils.serializer import LostObject
+from iotools.serializer import LostObject
 
 from .custom import Model, Query, Session, StringLiteral, BitLiteral
 from .expression import Select, Update, Insert, Delete, SelectInto

@@ -8,8 +8,8 @@ from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.ext.declarative import declarative_base
 
 from maybe import Maybe
-from subtypes import Str
-from miscutils import NameSpace, Cache
+from subtypes import Str, NameSpace
+from iotools import Cache
 
 from .custom import Model
 
