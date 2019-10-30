@@ -1,14 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Union, TYPE_CHECKING
+from typing import Any, Union, Dict, TYPE_CHECKING
 
 import pandas as pd
 import sqlalchemy as alch
 from sqlalchemy.orm.util import AliasedClass
+from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.sql.base import ImmutableColumnCollection
 from sqlalchemy.dialects.mssql import BIT
-
-from maybe import Maybe
 
 from .utils import literalstatement
 
@@ -19,6 +18,8 @@ if TYPE_CHECKING:
 class Model:
     """Custom base class for declarative and automap bases to inherit from. Represents a mapped table in a sql database."""
     sql: Sql
+    __instrumented_attributes: Dict[str, InstrumentedAttribute] = None
+
     __table__: alch.Table
     columns: ImmutableColumnCollection
 
@@ -55,32 +56,41 @@ class Model:
         """Drop the table mapped to this class."""
         cls.sql.drop_table(cls)
 
+    @classmethod
+    def _instrumented_attributes(cls) -> Dict[str]:
+        if cls.__instrumented_attributes is None:
+            cls.__instrumented_attributes = {key: val for key, val in vars(cls).items() if isinstance(val, InstrumentedAttribute)}
+
+        return cls.__instrumented_attributes
+
     def insert(self) -> Model:
         """Emit an insert statement for this object against this model's underlying table."""
         self.sql.session.add(self)
         return self
 
-    def update(self, argdeltas: dict = None, **update_kwargs: Any,) -> Model:
+    def update(self, argdeltas: Dict[Union[str, InstrumentedAttribute], Any] = None, **update_kwargs: Any) -> Model:
         """
-        Emit an update statement for this object against this model's underlying table.
+        Emit an update statement against database record represented by this object in this model's underlying table.
         This method positionally accepts a dict where the keys are the model's class attributes (of type InstrumentedAttribute) and the values are the values to update to.
         Alternatively, if the column names are known they may be set using keyword arguments. Raises AttributeError if invalid keys are provided.
-        If a dict is provided positionally all keyword arguments will be ignored.
         """
-        def ensure_names_are_valid(argnames: list) -> None:
-            valid_names = set(vars(type(self)))
-            for name in argnames:
-                if name not in valid_names:
-                    raise AttributeError(f"Cannot perform update, '{type(self).__name__}' object has no attribute: '{name}'.")
+        updates: Dict[str, Any] = {}
 
-        if argdeltas is not None:
-            ensure_names_are_valid(argdeltas)
-            for key, val in argdeltas.items():
-                setattr(self, Maybe(key).key.else_(key), val)
-        else:
-            ensure_names_are_valid(update_kwargs)
-            for key, val in update_kwargs.items():
-                setattr(self, key, val)
+        clean_argdeltas = {} if argdeltas is None else {(name if isinstance(name, str) else name.key): val for name, val in argdeltas.items()}
+        updates.update(clean_argdeltas)
+        updates.update(update_kwargs)
+
+        difference = set(updates) - set(self._instrumented_attributes())
+        if difference:
+            raise AttributeError(f"""Cannot perform update, '{type(self).__name__}' object has no attribute(s): {", ".join([f"'{unknown}'" for unknown in difference])}.""")
+
+        if clean_argdeltas and update_kwargs:
+            intersection = set(clean_argdeltas) & set(update_kwargs)
+            if intersection:
+                raise AttributeError(f"""Attribute(s) {", ".join([f"'{dupe}'" for dupe in intersection])} was/were provided twice.""")
+
+        for key, val in updates.items():
+            setattr(self, key, val)
 
         return self
 
