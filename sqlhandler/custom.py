@@ -8,6 +8,11 @@ from sqlalchemy.orm.util import AliasedClass
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.sql.base import ImmutableColumnCollection
 from sqlalchemy.dialects.mssql import BIT
+from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy import Column, true, null, func
+from sqlalchemy.types import Integer, String, Boolean, DateTime
+
+from subtypes import Str
 
 from .utils import literalstatement
 
@@ -27,9 +32,9 @@ class Model:
         return f"{type(self).__name__}({', '.join([f'{col.name}={repr(getattr(self, col.name))}' for col in type(self).__table__.columns])})"
 
     @classmethod
-    def alias(cls, name: str, *args: Any, **kwargs: Any) -> AliasedClass:
+    def alias(cls, name: str, **kwargs: Any) -> AliasedClass:
         """Create a new class that is an alias of this one, with the given name."""
-        return alch.orm.aliased(cls, *args, name=name, **kwargs)
+        return alch.orm.aliased(cls, name=name, **kwargs)
 
     @classmethod
     def join(cls, *args: Any, **kwargs: Any) -> Any:
@@ -99,10 +104,31 @@ class Model:
         self.sql.session.delete(self)
         return self
 
-    def clone(self, *args: Any, **kwargs: Any) -> Model:
+    def clone(self, argdeltas: Dict[Union[str, InstrumentedAttribute], Any] = None, **update_kwargs: Any) -> Model:
         """Create a clone (new primary_key, but copies of all other attributes) of this object in the detached state. Model.insert() will be required to persist it to the database."""
         valid_cols = [col.name for col in self.__table__.columns if col.name not in self.__table__.primary_key.columns]
-        return type(self)(**{col: getattr(self, col) for col in valid_cols}).update(*args, **kwargs)
+        return type(self)(**{col: getattr(self, col) for col in valid_cols}).update(argdeltas, **update_kwargs)
+
+
+class BoilerplateModel(Model):
+    @declared_attr
+    def __tablename__(cls):
+        return Str(cls.__name__).case.snake()
+
+    id = Column(Integer, primary_key=True)
+    name = Column(String(50), nullable=True, server_default=null())
+
+    @declared_attr
+    def active(cls):
+        return Column(Boolean, nullable=False, server_default=true())
+
+    @declared_attr
+    def created(cls):
+        return Column(DateTime, nullable=False, server_default=func.NOW())
+
+    @declared_attr
+    def modified(cls):
+        return Column(DateTime, nullable=False, server_default=func.NOW(), onupdate=func.NOW())
 
 
 class Session(alch.orm.Session):
@@ -138,9 +164,9 @@ class Query(alch.orm.Query):
     def __str__(self) -> str:
         return self.literal()
 
-    def frame(self, *args: Any, **kwargs: Any) -> pd.DataFrame:
+    def frame(self, labels: bool = False) -> pd.DataFrame:
         """Execute the query and return the result as a pandas DataFrame."""
-        return self.sql.query_to_frame(self, *args, **kwargs)
+        return self.sql.query_to_frame(self, labels=labels)
 
     def vector(self) -> list:
         """Transpose all records in a single column into a list. If the query returns more than one column, this will raise a RuntimeError."""
@@ -154,17 +180,17 @@ class Query(alch.orm.Query):
         """Returns this query's statement as raw SQL with inline literal binds."""
         return literalstatement(self)
 
-    def from_(self, *args: Any, **kwargs: Any) -> Query:
+    def from_(self, *from_obj: Any) -> Query:
         """Simple alias for the 'select_from' method. See that method's docstring for documentation."""
-        return self.select_from(*args, **kwargs)
+        return self.select_from(*from_obj)
 
-    def where(self, *args: Any, **kwargs: Any) -> Query:
+    def where(self, *criterion: Any) -> Query:
         """Simple alias for the 'filter' method. See that method's docstring for documentation."""
-        return self.filter(*args, **kwargs)
+        return self.filter(*criterion)
 
-    def set_(self, *args: Any, synchronize_session: Any = "fetch", **kwargs: Any) -> int:
+    def update(self, values: Any, synchronize_session: Any = "fetch", update_args: dict = None) -> int:
         """Simple alias for the '.update()' method, with the default 'synchronize_session' argument set to 'fetch', rather than 'evaluate'. Check that method for documentation."""
-        return self.update(*args, synchronize_session=synchronize_session, **kwargs)
+        return super().update(values, synchronize_session=synchronize_session)
 
 
 class StringLiteral(alch.sql.sqltypes.String):

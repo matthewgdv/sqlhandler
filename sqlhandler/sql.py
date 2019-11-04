@@ -9,13 +9,15 @@ import numpy as np
 import pandas as pd
 import sqlalchemy as alch
 from sqlalchemy.orm import backref, relationship
+from sqlalchemy.ext.declarative import declarative_base
 import pyodbc
 
 from subtypes import Frame, AutoEnum
 from pathmagic import File
+from miscutils import lazy_property
 from iotools.serializer import LostObject
 
-from .custom import Model, Query, Session, StringLiteral, BitLiteral
+from .custom import Model, BoilerplateModel, Query, Session, StringLiteral, BitLiteral
 from .expression import Select, Update, Insert, Delete, SelectInto
 from .utils import StoredProcedure, Script
 from .log import SqlLog
@@ -82,6 +84,12 @@ class Sql:
         """Custom base class for declarative and automap bases to inherit from. Represents a mapped table in a sql database."""
         return self.database.declaration
 
+    @lazy_property
+    def BoilerplateModel(self) -> BoilerplateModel:
+        model = declarative_base(bind=self.engine, metadata=self.database.meta, cls=BoilerplateModel)
+        model.sql = self
+        return model
+
     @property
     def orm(self) -> Schemas:
         """Property controlling access to mapped models. Models will only appear for tables that have a primary key, and never for views. Schemas must be accessed before tables: E.g. Sql().orm.some_schema.some_table"""
@@ -92,7 +100,7 @@ class Sql:
         """Property controlling access to raw database objects. Schemas must be accessed before tables: E.g. Sql().orm.some_schema.some_table"""
         return self.database.objects
 
-    @property
+    @lazy_property
     def operations(self) -> alembic.operations.Operations:
         """Property controlling access to alembic operations."""
         from alembic.migration import MigrationContext
