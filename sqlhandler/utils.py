@@ -17,6 +17,8 @@ if TYPE_CHECKING:
 
 SelfType = TypeVar("SelfType")
 
+# TODO: fix ON clause whitespace in all situations
+
 
 class SqlBoundMixin:
     """A mixin class for objects that require a reference to an Sql object in their constructor."""

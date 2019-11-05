@@ -11,12 +11,10 @@ from maybe import Maybe
 from subtypes import Str, NameSpace
 from iotools import Cache
 
-from .custom import Model
+from .custom import Model, ModelMeta
 
 if TYPE_CHECKING:
     from .sql import Sql
-
-# TODO: implement logic to handle database and metadata sync conflicts gracefully
 
 
 class Registry(dict):
@@ -31,11 +29,10 @@ class Database:
     def __init__(self, sql: Sql) -> None:
         self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=sql.config.appdata.new_file("sql_cache", "pkl"), days=5)
         self.meta = self._get_metadata()
-        self.declaration = self.reflection = None  # type: Model
+        self.declaration: Model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=Model, metaclass=ModelMeta, name="Model", class_registry=self._registry)
         self.orm, self.objects = Schemas(database=self), Schemas(database=self)
         self.default_schema_name = vars(self.sql.engine.dialect).get("schema_name", "default")
 
-        self._refresh_declarative_base()
         for schema in {self.meta.tables[table].schema for table in self.meta.tables}:
             self._add_schema_to_namespaces(schema)
 
@@ -47,7 +44,6 @@ class Database:
         schema = None if schema == self.default_schema_name else schema
 
         self.meta.reflect(schema=schema, views=True)
-        self._refresh_declarative_base()
         self._add_schema_to_namespaces(schema)
 
         self._cache_metadata()
@@ -62,37 +58,33 @@ class Database:
         """Emit a drop table statement to the database for the given table object."""
         table = self._normalize_table(table)
         table.drop()
-
-        self.meta.remove(table)
-        del self.orm[table.schema][table.name]
-        del self.objects[table.schema][table.name]
-
-        self._cache_metadata()
+        self._remove_table_from_metadata_if_exists(table)
 
     def refresh_table(self, table: alch.schema.Table) -> None:
         """Reflect the given table object again."""
         table = self._normalize_table(table)
-
-        self.meta.remove(table)
-        del self.orm[table.schema][table.name]
-        del self.objects[table.schema][table.name]
-
+        self._remove_table_from_metadata_if_exists(table)
         self.reflect(table.schema)
 
     def exists_table(self, table: alch.schema.Table) -> bool:
+        table = self._normalize_table(table)
         with self.sql.engine.connect() as con:
             return self.sql.engine.dialect.has_table(con, table.name, schema=table.schema)
 
     def clear(self) -> None:
         """Clear this database's metadata as well as its cache."""
-        self._registry.clear()
         self.meta.clear()
         self._cache_metadata()
         for namespace in (self.orm, self.objects):
             namespace._clear()
 
-    def _refresh_declarative_base(self) -> None:
-        self.declaration = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=Model, name="Model", class_registry=self._registry)
+    def _remove_table_from_metadata_if_exists(self, table: alch.schema.Table) -> None:
+        if table in self.meta:
+            self.meta.remove(table)
+            del self.orm[table.schema][table.name]
+            del self.objects[table.schema][table.name]
+
+            self._cache_metadata()
 
     def _add_schema_to_namespaces(self, schema: str) -> None:
         schema = None if schema == self.default_schema_name else schema
@@ -105,7 +97,7 @@ class Database:
         for table in invalid_tables:
             new_meta.remove(new_meta.tables[table])
 
-        declaration = declarative_base(bind=self.sql.engine, metadata=new_meta, cls=Model)
+        declaration = declarative_base(bind=self.sql.engine, metadata=new_meta, metaclass=ModelMeta, name="Model", cls=Model, class_registry=self._registry)
 
         automap = automap_base(declarative_base=declaration)
         automap.prepare(name_for_collection_relationship=self._pluralize_collection)
@@ -120,6 +112,11 @@ class Database:
             meta = alch.MetaData()
 
         meta.bind, meta.sql = self.sql.engine, self.sql
+
+        for table in list(meta.tables.values()):
+            if not self.exists_table(table):
+                meta.remove(table)
+
         return meta
 
     def _normalize_table(self, table: Union[Model, alch.schema.Table]) -> alch.schema.Table:

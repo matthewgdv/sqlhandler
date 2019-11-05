@@ -6,60 +6,60 @@ import pandas as pd
 
 import sqlalchemy as alch
 
+from sqlalchemy.schema import CreateTable
+
 from sqlalchemy.orm.util import AliasedClass
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 
 from sqlalchemy.sql.base import ImmutableColumnCollection
 from sqlalchemy.dialects.mssql import BIT
-from sqlalchemy.ext.declarative import declared_attr
+from sqlalchemy.ext.declarative import declared_attr, DeclarativeMeta
 
 from sqlalchemy import Column, true, null, func
 from sqlalchemy.types import Integer, String, Boolean, DateTime
 
 from subtypes import Str
+from miscutils import lazy_property
 
 from .utils import literalstatement
 
 
-class Model:
-    """Custom base class for declarative and automap bases to inherit from. Represents a mapped table in a sql database."""
-    __instrumented_attributes: Dict[str, InstrumentedAttribute] = None
-    __table__: alch.Table
+class ModelMeta(DeclarativeMeta):
+    def __repr__(cls) -> str:
+        return str(CreateTable(cls.__table__)).strip()
 
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}({', '.join([f'{col.name}={repr(getattr(self, col.name))}' for col in type(self).__table__.columns])})"
-
-    @classmethod
-    def alias(cls, name: str, **kwargs: Any) -> AliasedClass:
-        """Create a new class that is an alias of this one, with the given name."""
-        return alch.orm.aliased(cls, name=name, **kwargs)
-
-    @classmethod
-    def c(cls, colname: str = None) -> Union[ImmutableColumnCollection, alch.Column]:
-        """Access the columns (or a specific column if 'colname' is specified) of the underlying table."""
-        return cls.__table__.c if colname is None else cls.__table__.c[colname]
-
-    @classmethod
-    def query(cls) -> Query:
+    @property
+    def query(cls: Model) -> Query:
         """Create a new Query operating on this class."""
         return cls.metadata.sql.session.query(cls)
 
-    @classmethod
-    def create(cls) -> None:
+    @property
+    def c(cls: Model) -> ImmutableColumnCollection:
+        """Access the columns (or a specific column if 'colname' is specified) of the underlying table."""
+        return cls.__table__.c
+
+    @lazy_property
+    def _instrumented_attributes(cls: Model) -> Dict[str]:
+        return {key: val for key, val in vars(cls).items() if isinstance(val, InstrumentedAttribute)}
+
+    def alias(cls: Model, name: str, **kwargs: Any) -> AliasedClass:
+        """Create a new class that is an alias of this one, with the given name."""
+        return alch.orm.aliased(cls, name=name, **kwargs)
+
+    def create(cls: Model) -> None:
         """Create the table mapped to this class."""
         cls.metadata.sql.create_table(cls)
 
-    @classmethod
-    def drop(cls) -> None:
+    def drop(cls: Model) -> None:
         """Drop the table mapped to this class."""
         cls.metadata.sql.drop_table(cls)
 
-    @classmethod
-    def _instrumented_attributes(cls) -> Dict[str]:
-        if cls.__instrumented_attributes is None:
-            cls.__instrumented_attributes = {key: val for key, val in vars(cls).items() if isinstance(val, InstrumentedAttribute)}
 
-        return cls.__instrumented_attributes
+class Model:
+    """Custom base class for declarative and automap bases to inherit from. Represents a mapped table in a sql database."""
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({', '.join([f'{col.name}={repr(getattr(self, col.name))}' for col in type(self).__table__.columns])})"
 
     def insert(self) -> Model:
         """Emit an insert statement for this object against this model's underlying table."""
@@ -78,7 +78,7 @@ class Model:
         updates.update(clean_argdeltas)
         updates.update(update_kwargs)
 
-        difference = set(updates) - set(self._instrumented_attributes())
+        difference = set(updates) - set(self._instrumented_attributes)
         if difference:
             raise AttributeError(f"""Cannot perform update, '{type(self).__name__}' object has no attribute(s): {", ".join([f"'{unknown}'" for unknown in difference])}.""")
 
@@ -103,7 +103,7 @@ class Model:
         return type(self)(**{col: getattr(self, col) for col in valid_cols}).update(argdeltas, **update_kwargs)
 
 
-class BoilerplateModel(Model):
+class AutoModel(Model):
     @declared_attr
     def __tablename__(cls):
         return str(Str(cls.__name__).case.snake())
@@ -126,6 +126,9 @@ class BoilerplateModel(Model):
 
 class Session(alch.orm.Session):
     """Custom subclass of sqlalchemy.orm.Session granting access to a custom Query class through the '.query()' method."""
+
+    def query(self, *entities: Any) -> Query:
+        return super().query(*entities)
 
     def execute(self, *args: Any, autocommit: bool = False, **kwargs: Any) -> alch.engine.ResultProxy:
         """Execute an valid object against this Session. If 'autocommit=True' is passed, the transaction will be commited if the statement completes without errors."""

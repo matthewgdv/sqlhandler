@@ -17,7 +17,7 @@ from pathmagic import File
 from miscutils import lazy_property
 from iotools.serializer import LostObject
 
-from .custom import Model, BoilerplateModel, Query, Session, StringLiteral, BitLiteral
+from .custom import Model, ModelMeta, AutoModel, Query, Session, StringLiteral, BitLiteral
 from .expression import Select, Update, Insert, Delete, SelectInto
 from .utils import StoredProcedure, Script
 from .log import SqlLog
@@ -87,10 +87,8 @@ class Sql:
         return self.database.declaration
 
     @lazy_property
-    def BoilerplateModel(self) -> BoilerplateModel:
-        model = declarative_base(bind=self.engine, metadata=self.database.meta, cls=BoilerplateModel, name="BoilerplateModel", class_registry=self.database._registry)
-        model.sql = self
-        return model
+    def AutoModel(self) -> AutoModel:
+        return declarative_base(bind=self.engine, metadata=self.database.meta, cls=AutoModel, metaclass=ModelMeta, name="AutoModel", class_registry=self.database._registry)
 
     @property
     def orm(self) -> Schemas:
