@@ -16,9 +16,17 @@ from .custom import Model
 if TYPE_CHECKING:
     from .sql import Sql
 
+# TODO: implement logic to handle database and metadata sync conflicts gracefully
+
+
+class Registry(dict):
+    def __setitem__(self, key: Any, val: Any) -> None:
+        pass
+
 
 class Database:
     """A class representing a sql database. Abstracts away database reflection and metadata caching. The cache lasts for 5 days but can be cleared with Database.clear()"""
+    _registry = Registry()
 
     def __init__(self, sql: Sql) -> None:
         self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=sql.config.appdata.new_file("sql_cache", "pkl"), days=5)
@@ -71,16 +79,20 @@ class Database:
 
         self.reflect(table.schema)
 
+    def exists_table(self, table: alch.schema.Table) -> bool:
+        with self.sql.engine.connect() as con:
+            return self.sql.engine.dialect.has_table(con, table.name, schema=table.schema)
+
     def clear(self) -> None:
         """Clear this database's metadata as well as its cache."""
+        self._registry.clear()
         self.meta.clear()
         self._cache_metadata()
         for namespace in (self.orm, self.objects):
             namespace._clear()
 
     def _refresh_declarative_base(self) -> None:
-        self.declaration = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=Model)
-        self.declaration.sql = self.sql
+        self.declaration = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=Model, name="Model", class_registry=self._registry)
 
     def _add_schema_to_namespaces(self, schema: str) -> None:
         schema = None if schema == self.default_schema_name else schema
@@ -94,7 +106,6 @@ class Database:
             new_meta.remove(new_meta.tables[table])
 
         declaration = declarative_base(bind=self.sql.engine, metadata=new_meta, cls=Model)
-        declaration.sql = self.sql
 
         automap = automap_base(declarative_base=declaration)
         automap.prepare(name_for_collection_relationship=self._pluralize_collection)
@@ -103,8 +114,12 @@ class Database:
         self.objects._add_schema(name=schema, tables=[new_meta.tables[item] for item in new_meta.tables])
 
     def _get_metadata(self) -> None:
-        meta = self.cache.setdefault(self.name, alch.MetaData())
-        meta.bind = self.sql.engine
+        try:
+            meta = self.cache.setdefault(self.name, alch.MetaData())
+        except Exception:
+            meta = alch.MetaData()
+
+        meta.bind, meta.sql = self.sql.engine, self.sql
         return meta
 
     def _normalize_table(self, table: Union[Model, alch.schema.Table]) -> alch.schema.Table:
@@ -115,8 +130,7 @@ class Database:
 
     @staticmethod
     def _pluralize_collection(base: Any, local_cls: Any, referred_cls: Any, constraint: Any) -> str:
-        referred_name = referred_cls.__name__
-        return str(Str(referred_name).case.snake().case.plural())
+        return str(Str(referred_cls.__name__).case.snake().case.plural())
 
 
 class Schemas(NameSpace):

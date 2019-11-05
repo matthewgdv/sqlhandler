@@ -1,14 +1,18 @@
 from __future__ import annotations
 
-from typing import Any, Union, Dict, TYPE_CHECKING
+from typing import Any, Union, Dict
 
 import pandas as pd
+
 import sqlalchemy as alch
+
 from sqlalchemy.orm.util import AliasedClass
 from sqlalchemy.orm.attributes import InstrumentedAttribute
+
 from sqlalchemy.sql.base import ImmutableColumnCollection
 from sqlalchemy.dialects.mssql import BIT
 from sqlalchemy.ext.declarative import declared_attr
+
 from sqlalchemy import Column, true, null, func
 from sqlalchemy.types import Integer, String, Boolean, DateTime
 
@@ -16,17 +20,11 @@ from subtypes import Str
 
 from .utils import literalstatement
 
-if TYPE_CHECKING:
-    from .sql import Sql
-
 
 class Model:
     """Custom base class for declarative and automap bases to inherit from. Represents a mapped table in a sql database."""
-    sql: Sql
     __instrumented_attributes: Dict[str, InstrumentedAttribute] = None
-
     __table__: alch.Table
-    columns: ImmutableColumnCollection
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({', '.join([f'{col.name}={repr(getattr(self, col.name))}' for col in type(self).__table__.columns])})"
@@ -37,11 +35,6 @@ class Model:
         return alch.orm.aliased(cls, name=name, **kwargs)
 
     @classmethod
-    def join(cls, *args: Any, **kwargs: Any) -> Any:
-        """Create a join between the table belonging to this class and another model."""
-        return cls.__table__.join(*args, **kwargs)
-
-    @classmethod
     def c(cls, colname: str = None) -> Union[ImmutableColumnCollection, alch.Column]:
         """Access the columns (or a specific column if 'colname' is specified) of the underlying table."""
         return cls.__table__.c if colname is None else cls.__table__.c[colname]
@@ -49,17 +42,17 @@ class Model:
     @classmethod
     def query(cls) -> Query:
         """Create a new Query operating on this class."""
-        return cls.sql.session.query(cls)
+        return cls.metadata.sql.session.query(cls)
 
     @classmethod
     def create(cls) -> None:
         """Create the table mapped to this class."""
-        cls.sql.create_table(cls)
+        cls.metadata.sql.create_table(cls)
 
     @classmethod
     def drop(cls) -> None:
         """Drop the table mapped to this class."""
-        cls.sql.drop_table(cls)
+        cls.metadata.sql.drop_table(cls)
 
     @classmethod
     def _instrumented_attributes(cls) -> Dict[str]:
@@ -70,7 +63,7 @@ class Model:
 
     def insert(self) -> Model:
         """Emit an insert statement for this object against this model's underlying table."""
-        self.sql.session.add(self)
+        self.metadata.sql.session.add(self)
         return self
 
     def update(self, argdeltas: Dict[Union[str, InstrumentedAttribute], Any] = None, **update_kwargs: Any) -> Model:
@@ -113,7 +106,7 @@ class Model:
 class BoilerplateModel(Model):
     @declared_attr
     def __tablename__(cls):
-        return Str(cls.__name__).case.snake()
+        return str(Str(cls.__name__).case.snake())
 
     id = Column(Integer, primary_key=True)
     name = Column(String(50), nullable=True, server_default=null())
@@ -134,14 +127,6 @@ class BoilerplateModel(Model):
 class Session(alch.orm.Session):
     """Custom subclass of sqlalchemy.orm.Session granting access to a custom Query class through the '.query()' method."""
 
-    def __init__(self, *args: Any, sql: Sql = None, **kwargs: Any) -> None:
-        self.sql = sql
-        super().__init__(*args, **kwargs)
-
-    def query(self, *args: Any) -> Query:
-        """Return a custom subclass of sqlalchemy.orm.Query with additional useful methods and aliases for existing methods."""
-        return Query(*args, sql=self.sql)
-
     def execute(self, *args: Any, autocommit: bool = False, **kwargs: Any) -> alch.engine.ResultProxy:
         """Execute an valid object against this Session. If 'autocommit=True' is passed, the transaction will be commited if the statement completes without errors."""
         res = super().execute(*args, **kwargs)
@@ -153,11 +138,6 @@ class Session(alch.orm.Session):
 class Query(alch.orm.Query):
     """Custom subclass of sqlalchemy.orm.Query with additional useful methods and aliases for existing methods."""
 
-    def __init__(self, *args: Any, sql: Sql = None) -> None:
-        self.sql = sql
-        aslist = args[0] if len(args) == 1 and isinstance(args[0], list) else [*args]
-        super().__init__(aslist, session=self.sql.session)
-
     def __repr__(self) -> str:
         return f"{type(self).__name__}(\n{(str(self))}\n)"
 
@@ -166,7 +146,7 @@ class Query(alch.orm.Query):
 
     def frame(self, labels: bool = False) -> pd.DataFrame:
         """Execute the query and return the result as a pandas DataFrame."""
-        return self.sql.query_to_frame(self, labels=labels)
+        return self.session.bind.sql.query_to_frame(self, labels=labels)
 
     def vector(self) -> list:
         """Transpose all records in a single column into a list. If the query returns more than one column, this will raise a RuntimeError."""

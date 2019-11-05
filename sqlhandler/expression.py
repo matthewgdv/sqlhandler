@@ -11,7 +11,7 @@ import sqlparse.sql as sqltypes
 from maybe import Maybe
 from subtypes import Str, Frame, List_
 
-from .utils import SqlBoundMixin, literalstatement
+from .utils import literalstatement
 
 
 if TYPE_CHECKING:
@@ -20,6 +20,10 @@ if TYPE_CHECKING:
 
 class ExpressionMixin:
     """A mixin providing private methods for logging using expression classes."""
+
+    @property
+    def sql(self) -> Sql:
+        return self.bind.sql
 
     def execute(self, autocommit: bool = False) -> str:
         """Execute this query's statement in the current session."""
@@ -89,13 +93,8 @@ class ExpressionMixin:
             self.sql.Select(["*"]).select_from(self.sql.Text(f"{self.into}")).resolve()
 
 
-class Select(alch.sql.Select, SqlBoundMixin):
+class Select(alch.sql.Select):
     """Custom subclass of sqlalchemy.sql.Select with additional useful methods and aliases for existing methods."""
-
-    def __init__(self, *args: Any, sql: Sql = None, **kwargs: Any) -> None:
-        self.sql = sql
-        aslist = args[0] if len(args) == 1 and isinstance(args[0], list) else [*args]
-        super().__init__(aslist, **kwargs)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(\n{(str(self))}\n)"
@@ -110,8 +109,8 @@ class Select(alch.sql.Select, SqlBoundMixin):
     def resolve(self) -> Frame:
         """Convert this query into a subtypes.Frame and write an ascii representation of it to the log, then return it."""
         frame = self._select_to_frame()
-        self.sql.log.write(str(self), add_newlines=2)
-        self.sql.log.write_comment(frame.applymap(lambda val: 1 if val is True else (0 if val is False else ("NULL" if val is None else val))).to_ascii(), add_newlines=2)
+        self.bind.sql.log.write(str(self), add_newlines=2)
+        self.bind.sql.log.write_comment(frame.applymap(lambda val: 1 if val is True else (0 if val is False else ("NULL" if val is None else val))).to_ascii(), add_newlines=2)
         return frame
 
     def literal(self) -> str:
@@ -123,17 +122,13 @@ class Select(alch.sql.Select, SqlBoundMixin):
         return self.select_from(*args, **kwargs)
 
     def _select_to_frame(self) -> None:
-        result = self.sql.session.execute(self)
+        result = self.bind.sql.session.execute(self)
         cols = [col[0] for col in result.cursor.description]
         return Frame(result.fetchall(), columns=cols)
 
 
-class Update(alch.sql.Update, SqlBoundMixin, ExpressionMixin):
+class Update(ExpressionMixin, alch.sql.Update):
     """Custom subclass of sqlalchemy.sql.Update with additional useful methods and aliases for existing methods."""
-
-    def __init__(self, *args: Any, sql: Sql = None, **kwargs: Any) -> None:
-        self.sql = sql
-        super().__init__(*args, **kwargs)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(\n{(str(self))}\n)"
@@ -158,12 +153,8 @@ class Update(alch.sql.Update, SqlBoundMixin, ExpressionMixin):
         return self.values(*args, **kwargs)
 
 
-class Insert(alch.sql.Insert, SqlBoundMixin, ExpressionMixin):
+class Insert(ExpressionMixin, alch.sql.Insert):
     """Custom subclass of sqlalchemy.sql.Insert with additional useful methods and aliases for existing methods."""
-
-    def __init__(self, *args: Any, sql: Sql = None, **kwargs: Any) -> None:
-        self.sql = sql
-        super().__init__(*args, **kwargs)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(\n{(str(self))}\n)"
@@ -235,12 +226,8 @@ class Insert(alch.sql.Insert, SqlBoundMixin, ExpressionMixin):
         return final
 
 
-class Delete(alch.sql.Delete, SqlBoundMixin, ExpressionMixin):
+class Delete(ExpressionMixin, alch.sql.Delete):
     """Custom subclass of sqlalchemy.sql.Delete with additional useful methods and aliases for existing methods."""
-
-    def __init__(self, *args: Any, sql: Sql = None, **kwargs: Any) -> None:
-        self.sql = sql
-        super().__init__(*args, **kwargs)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(\n{(str(self))}\n)"
@@ -260,13 +247,12 @@ class Delete(alch.sql.Delete, SqlBoundMixin, ExpressionMixin):
         return literalstatement(self)
 
 
-class SelectInto(alch.sql.Select, SqlBoundMixin, ExpressionMixin):
+class SelectInto(ExpressionMixin, alch.sql.Select):
     """Custom subclass of sqlalchemy.sql.Select for 'SELECT * INTO #tmp' syntax with additional useful methods and aliases for existing methods."""
 
-    def __init__(self, columns: list, *arg: Any, table: str = None, schema: str = None, sql: Sql = None, **kw: Any) -> None:
-        self.sql = sql
+    def __init__(self, columns: list, *args: Any, table: str = None, schema: str = None, **kwargs: Any) -> None:
         self.into = f"{schema or 'dbo'}.{table}"
-        super().__init__(columns, *arg, **kw)
+        super().__init__(columns, *args, **kwargs)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(\n{(str(self))}\n)"

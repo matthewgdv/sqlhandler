@@ -43,15 +43,17 @@ class Sql:
 
     def __init__(self, connection: str = None, database: str = None, log: File = None, autocommit: bool = False) -> None:
         self.config = Config()
-        self.engine = self._create_engine(connection=connection, database=database)
-        self.session = Session(self.engine, sql=self)
 
+        self.engine = self._create_engine(connection=connection, database=database)
+        self.engine.sql = self
+
+        self.session = Session(bind=self.engine, query_cls=Query)
         self.database = Database(self)
 
         self.log, self.autocommit = log, autocommit
 
-        self.Select, self.SelectInto, self.Update = Select.from_sql(self), SelectInto.from_sql(self), Update.from_sql(self)
-        self.Insert, self.Delete = Insert.from_sql(self), Delete.from_sql(self)
+        self.Select, self.SelectInto, self.Update = Select, SelectInto, Update
+        self.Insert, self.Delete = Insert, Delete
         self.StoredProcedure, self.Script = StoredProcedure.from_sql(self), Script.from_sql(self)
 
         self.text, self.literal = alch.text, alch.literal
@@ -76,7 +78,7 @@ class Sql:
     def __getstate__(self) -> dict:
         return {"engine": LostObject(self.engine), "database": LostObject(self.database), "autocommit": self.autocommit, "_log": self.log}
 
-    def __setstate__(self, attrs) -> None:
+    def __setstate__(self, attrs: dict) -> None:
         self.__dict__ = attrs
 
     @property
@@ -86,7 +88,7 @@ class Sql:
 
     @lazy_property
     def BoilerplateModel(self) -> BoilerplateModel:
-        model = declarative_base(bind=self.engine, metadata=self.database.meta, cls=BoilerplateModel)
+        model = declarative_base(bind=self.engine, metadata=self.database.meta, cls=BoilerplateModel, name="BoilerplateModel", class_registry=self.database._registry)
         model.sql = self
         return model
 
@@ -167,7 +169,7 @@ class Sql:
 
         dtypes = self._sql_dtype_dict_from_frame(dataframe)
         if has_identity_pk:
-            dtypes.update({primary_key: alch.types.INT})
+            dtypes[primary_key] = alch.types.INT
 
         dataframe.to_sql(engine=self.engine, name=table, if_exists=if_exists, index=False, index_label=None, primary_key=primary_key, schema=schema, dtype=dtypes)
 
