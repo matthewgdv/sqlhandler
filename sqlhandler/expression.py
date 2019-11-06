@@ -10,6 +10,7 @@ import sqlparse.sql as sqltypes
 
 from maybe import Maybe
 from subtypes import Str, Frame, List_
+from miscutils import is_non_string_iterable
 
 from .utils import literalstatement
 
@@ -95,6 +96,10 @@ class ExpressionMixin:
 
 class Select(alch.sql.Select):
     """Custom subclass of sqlalchemy.sql.Select with additional useful methods and aliases for existing methods."""
+
+    def __init__(self, *columns: Any, whereclause: Any = None, from_obj: Any = None, distinct: Any = False, having: Any = None, correlate: Any = True, prefixes: Any = None, suffixes: Any = None, **kwargs: Any) -> None:
+        as_single_iterable = columns[0] if len(columns) == 1 and is_non_string_iterable(columns[0]) else [*columns]
+        super().__init__(columns=as_single_iterable, whereclause=whereclause, from_obj=from_obj, distinct=distinct, having=having, correlate=correlate, prefixes=prefixes, suffixes=suffixes, **kwargs)
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(\n{(str(self))}\n)"
