@@ -26,21 +26,20 @@ from .utils import literalstatement
 
 class ModelMeta(DeclarativeMeta):
     def __repr__(cls) -> str:
+        return repr(cls.__table__)
+
+    def __str__(cls) -> str:
         return str(CreateTable(cls.__table__)).strip()
 
     @property
     def query(cls: Model) -> Query:
         """Create a new Query operating on this class."""
-        return cls.metadata.sql.session.query(cls)
+        return cls.metadata.bind.sql.session.query(cls)
 
     @property
     def c(cls: Model) -> ImmutableColumnCollection:
         """Access the columns (or a specific column if 'colname' is specified) of the underlying table."""
         return cls.__table__.c
-
-    @lazy_property
-    def _instrumented_attributes(cls: Model) -> Dict[str]:
-        return {key: val for key, val in vars(cls).items() if isinstance(val, InstrumentedAttribute)}
 
     def alias(cls: Model, name: str, **kwargs: Any) -> AliasedClass:
         """Create a new class that is an alias of this one, with the given name."""
@@ -78,7 +77,7 @@ class Model:
         updates.update(clean_argdeltas)
         updates.update(update_kwargs)
 
-        difference = set(updates) - set(self._instrumented_attributes)
+        difference = set(updates) - set([attr.key for attr in self.__mapper__.all_orm_descriptors])
         if difference:
             raise AttributeError(f"""Cannot perform update, '{type(self).__name__}' object has no attribute(s): {", ".join([f"'{unknown}'" for unknown in difference])}.""")
 
