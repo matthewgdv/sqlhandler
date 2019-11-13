@@ -1,14 +1,14 @@
 from __future__ import annotations
 
 from maybe import Maybe
-from subtypes import Enum
+from subtypes import ValueEnum
 import iotools
 import sqlhandler
 
 from sqlalchemy.engine.url import URL
 
 
-class Dialect(Enum):
+class Dialect(ValueEnum):
     """Enum of known dialect drivers."""
     MS_SQL, MY_SQL, SQLITE, POSTGRESQL, ORACLE = "mssql", "mysql", "sqlite", "posgresql", "oracle"
 

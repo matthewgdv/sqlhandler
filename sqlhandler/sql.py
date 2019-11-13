@@ -12,7 +12,7 @@ from sqlalchemy.orm import backref, relationship
 from sqlalchemy.ext.declarative import declarative_base
 import pyodbc
 
-from subtypes import Frame, AutoEnum
+from subtypes import Frame, Enum
 from pathmagic import File
 from miscutils import lazy_property
 from iotools.serializer import LostObject
@@ -38,8 +38,8 @@ class Sql:
     The 'Sql.orm' and 'Sql.objects' attributes provide access via attribute or item access to the reflected database models and underlying table objects, respectively.
     """
 
-    class IfExists(AutoEnum):
-        FAIL, REPLACE, APPEND  # noqa
+    class IfExists(Enum):
+        FAIL, REPLACE, APPEND = "fail", "replace", "append"
 
     def __init__(self, connection: str = None, database: str = None, log: File = None, autocommit: bool = False) -> None:
         self.config = Config()
@@ -142,11 +142,11 @@ class Sql:
         """Reads the target table or view (from the specified schema) into a pandas DataFrame."""
         return Frame(pd.read_sql_table(table, self.engine, schema=schema))
 
-    def excel_to_table(self, filepath: os.PathLike, table: str = "temp", schema: str = None, if_exists: str = "fail", primary_key: str = "id", **kwargs: Any) -> Model:
+    def excel_to_table(self, filepath: os.PathLike, table: str = "temp", schema: str = None, if_exists: Sql.IfExists = IfExists.FAIL, primary_key: str = "id", **kwargs: Any) -> Model:
         """Bulk insert the contents of the target '.xlsx' file to the specified table."""
         return self.frame_to_table(dataframe=Frame.from_excel(filepath, **kwargs), table=table, schema=schema, if_exists=if_exists, primary_key=primary_key)
 
-    def frame_to_table(self, dataframe: pd.DataFrame, table: str, schema: str = None, if_exists: str = "fail", primary_key: str = "id") -> Model:
+    def frame_to_table(self, dataframe: pd.DataFrame, table: str, schema: str = None, if_exists: Sql.IfExists = IfExists.FAIL, primary_key: str = "id") -> Model:
         """Bulk insert the contents of a pandas DataFrame to the specified table."""
         dataframe = Frame(dataframe)
 
