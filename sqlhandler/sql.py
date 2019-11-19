@@ -15,7 +15,7 @@ import pyodbc
 from subtypes import Frame, Enum
 from pathmagic import File
 from miscutils import lazy_property
-from iotools.serializer import LostObject
+from iotools.misc.serializer import LostObject
 
 from .custom import Model, ModelMeta, AutoModel, Query, Session, StringLiteral, BitLiteral
 from .expression import Select, Update, Insert, Delete, SelectInto
