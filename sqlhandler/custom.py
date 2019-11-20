@@ -19,7 +19,6 @@ from sqlalchemy import Column, true, null, func
 from sqlalchemy.types import Integer, String, Boolean, DateTime
 
 from subtypes import Str
-from miscutils import lazy_property
 
 from .utils import literalstatement
 
@@ -93,7 +92,7 @@ class Model:
 
     def delete(self) -> Model:
         """Emit a delete statement for this object against this model's underlying table."""
-        self.sql.session.delete(self)
+        self.metadata.sql.session.delete(self)
         return self
 
     def clone(self, argdeltas: Dict[Union[str, InstrumentedAttribute], Any] = None, **update_kwargs: Any) -> Model:

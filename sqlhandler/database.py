@@ -90,6 +90,8 @@ class Database:
         schema = None if schema == self.default_schema_name else schema
 
         new_meta = copy.deepcopy(self.meta)
+        new_meta.sql = self.sql
+
         invalid_tables = ({table for table in new_meta.tables if new_meta.tables[table].schema is not None}
                           if schema is None else
                           {table for table in new_meta.tables if new_meta.tables[table].schema is None or new_meta.tables[table].schema.lower() != schema})
