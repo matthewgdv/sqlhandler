@@ -102,7 +102,7 @@ class Script(Executable):
         return f"{type(self).__name__}(file={self.file})"
 
     def _compile_sql(self, *args: Any, **kwargs: Any) -> Frame:
-        return (self.file.contents, {})
+        return (self.file.content, {})
 
 
 class TempManager:

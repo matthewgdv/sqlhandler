@@ -143,11 +143,11 @@ class Sql:
         return Frame(pd.read_sql_table(table, self.engine, schema=schema))
 
     def excel_to_table(self, filepath: os.PathLike, table: str = "temp", schema: str = None, if_exists: Sql.IfExists = IfExists.FAIL, primary_key: str = "id", **kwargs: Any) -> Model:
-        """Bulk insert the contents of the target '.xlsx' file to the specified table."""
+        """Bulk insert the content of the target '.xlsx' file to the specified table."""
         return self.frame_to_table(dataframe=Frame.from_excel(filepath, **kwargs), table=table, schema=schema, if_exists=if_exists, primary_key=primary_key)
 
     def frame_to_table(self, dataframe: pd.DataFrame, table: str, schema: str = None, if_exists: Sql.IfExists = IfExists.FAIL, primary_key: str = "id") -> Model:
-        """Bulk insert the contents of a pandas DataFrame to the specified table."""
+        """Bulk insert the content of a pandas DataFrame to the specified table."""
         dataframe = Frame(dataframe)
 
         has_identity_pk = False
