@@ -76,7 +76,7 @@ class Database:
         self.meta.clear()
         self._cache_metadata()
         for namespace in (self.orm, self.objects):
-            namespace._clear()
+            namespace()
 
     def _remove_table_from_metadata_if_exists(self, table: alch.schema.Table) -> None:
         if table in self.meta:
@@ -182,6 +182,6 @@ class Schema(NameSpace):
             raise AttributeError(f"{type(self).__name__} '{self._name}' of {type(self._database).__name__} '{self._database.name}' has no object '{attr}'.")
 
     def _refresh_from_tables(self, tables: list) -> None:
-        self._clear()
+        self()
         for name, table in {Maybe(table).__table__.else_(table).name: table for table in tables}.items():
             self[name] = table
