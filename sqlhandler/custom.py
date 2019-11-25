@@ -24,11 +24,13 @@ from .utils import literalstatement
 
 
 class ModelMeta(DeclarativeMeta):
+    __table__ = None
+
     def __repr__(cls) -> str:
-        return repr(cls.__table__)
+        return cls.__name__ if cls.__table__ is None else f"{cls.__name__}({', '.join([f'{col.key}={type(col.type).__name__}' for col in cls.__table__.columns])})"
 
     def __str__(cls) -> str:
-        return str(CreateTable(cls.__table__)).strip()
+        return cls.__name__ if cls.__table__ is None else str(CreateTable(cls.__table__)).strip()
 
     @property
     def query(cls: Model) -> Query:
@@ -172,6 +174,11 @@ class Query(alch.orm.Query):
     def update(self, values: Any, synchronize_session: Any = "fetch", update_args: dict = None) -> int:
         """Simple alias for the '.update()' method, with the default 'synchronize_session' argument set to 'fetch', rather than 'evaluate'. Check that method for documentation."""
         return super().update(values, synchronize_session=synchronize_session)
+
+
+class ForeignKey(alch.ForeignKey):
+    def __init__(self, column: Any, *args: Any, **kwargs: Any) -> None:
+        super().__init__(column=f"{column.comparator.table.name}.{column.comparator.key}" if isinstance(column, InstrumentedAttribute) else column, *args, **kwargs)
 
 
 class StringLiteral(alch.sql.sqltypes.String):
