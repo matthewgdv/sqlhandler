@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 import sqlalchemy as alch
 from sqlalchemy.orm import backref, relationship
-from sqlalchemy.ext.declarative import declarative_base
 import pyodbc
 
 from subtypes import Frame, Enum
@@ -17,7 +16,7 @@ from pathmagic import File
 from miscutils import lazy_property
 from iotools.misc.serializer import LostObject
 
-from .custom import Model, ModelMeta, AutoModel, Query, Session, StringLiteral, BitLiteral
+from .custom import Model, AutoModel, Query, Session, StringLiteral, BitLiteral
 from .expression import Select, Update, Insert, Delete, SelectInto
 from .utils import StoredProcedure, Script
 from .log import SqlLog
@@ -76,7 +75,7 @@ class Sql:
         self.session.commit() if ex_type is None else self.session.rollback()
 
     def __getstate__(self) -> dict:
-        return {"engine": LostObject(self.engine), "database": LostObject(self.database), "autocommit": self.autocommit, "_log": self.log}
+        return {"engine": LostObject(self.engine), "database": LostObject(self.database), "autocommit": self.autocommit}
 
     def __setstate__(self, attrs: dict) -> None:
         self.__dict__ = attrs
@@ -84,11 +83,11 @@ class Sql:
     @property
     def Model(self) -> Model:
         """Custom base class for declarative and automap bases to inherit from. Represents a mapped table in a sql database."""
-        return self.database.declaration
+        return self.database.model
 
-    @lazy_property
+    @property
     def AutoModel(self) -> AutoModel:
-        return declarative_base(bind=self.engine, metadata=self.database.meta, cls=AutoModel, metaclass=ModelMeta, name="AutoModel", class_registry=self.database._registry)
+        return self.database.auto_model
 
     @property
     def orm(self) -> Schemas:

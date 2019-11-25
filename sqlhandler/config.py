@@ -24,7 +24,7 @@ class Config(iotools.Config):
     """A config class granting access to an os-specific appdata directory for use by this library."""
     Dialect = Dialect
     app_name = sqlhandler.__name__
-    default = {"default_connection": "", "connections": {"memory": {"host": "", "drivername": "sqlite", "default_database": None, "username": None, "password": None, "port": None, "query": None}}}
+    default = {"default_connection": "memory", "connections": {"memory": {"host": "", "drivername": "sqlite", "default_database": None, "username": None, "password": None, "port": None, "query": None}}}
 
     def add_connection(self, connection: str, host: str, drivername: str, default_database: str, username: str = None, password: str = None, port: str = None, query: dict = None, is_default: bool = False) -> None:
         """Add a new connection with the given arguments."""

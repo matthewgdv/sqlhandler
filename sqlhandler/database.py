@@ -6,15 +6,26 @@ import copy
 import sqlalchemy as alch
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.util import immutabledict
 
 from maybe import Maybe
 from subtypes import Str, NameSpace
 from iotools import Cache
 
-from .custom import Model, ModelMeta
+from .custom import Model, AutoModel, ModelMeta
 
 if TYPE_CHECKING:
     from .sql import Sql
+
+
+class Metadata(alch.MetaData):
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}"  # (tables={repr([*self.tables])})
+
+    def copy_schema_subset(self, schema: str) -> Metadata:
+        shallow = copy.copy(self)
+        shallow.tables = immutabledict({name: table for name, table in self.tables.items() if (schema or "") == (table.schema or "")})
+        return shallow
 
 
 class Registry(dict):
@@ -29,7 +40,10 @@ class Database:
     def __init__(self, sql: Sql) -> None:
         self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=sql.config.appdata.new_file("sql_cache", "pkl"), days=5)
         self.meta = self._get_metadata()
-        self.declaration: Model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=Model, metaclass=ModelMeta, name="Model", class_registry=self._registry)
+
+        self.model: Model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=Model, metaclass=ModelMeta, name="Model", class_registry=self._registry)
+        self.auto_model: AutoModel = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=AutoModel, metaclass=ModelMeta, name="AutoModel", class_registry=self._registry)
+
         self.orm, self.objects = Schemas(database=self), Schemas(database=self)
         self.default_schema_name = vars(self.sql.engine.dialect).get("schema_name", "default")
 
@@ -89,29 +103,20 @@ class Database:
     def _add_schema_to_namespaces(self, schema: str) -> None:
         schema = None if schema == self.default_schema_name else schema
 
-        new_meta = copy.deepcopy(self.meta)
-        new_meta.sql = self.sql
+        new_meta = self.meta.copy_schema_subset(schema)
+        model = declarative_base(bind=self.sql.engine, metadata=new_meta, metaclass=ModelMeta, name="Model", cls=Model, class_registry=self._registry)
 
-        invalid_tables = ({table for table in new_meta.tables if new_meta.tables[table].schema is not None}
-                          if schema is None else
-                          {table for table in new_meta.tables if new_meta.tables[table].schema is None or new_meta.tables[table].schema.lower() != schema})
-
-        for table in invalid_tables:
-            new_meta.remove(new_meta.tables[table])
-
-        declaration = declarative_base(bind=self.sql.engine, metadata=new_meta, metaclass=ModelMeta, name="Model", cls=Model, class_registry=self._registry)
-
-        automap = automap_base(declarative_base=declaration)
+        automap = automap_base(declarative_base=model)
         automap.prepare(name_for_collection_relationship=self._pluralize_collection)
 
         self.orm._add_schema(name=schema, tables=list(automap.classes))
         self.objects._add_schema(name=schema, tables=[new_meta.tables[item] for item in new_meta.tables])
 
-    def _get_metadata(self) -> None:
+    def _get_metadata(self) -> Metadata:
         try:
-            meta = self.cache.setdefault(self.name, alch.MetaData())
+            meta = self.cache.setdefault(self.name, Metadata())
         except Exception:
-            meta = alch.MetaData()
+            meta = Metadata()
 
         meta.bind, meta.sql = self.sql.engine, self.sql
 
