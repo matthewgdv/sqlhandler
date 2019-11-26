@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 class Metadata(alch.MetaData):
-    def __init__(self, sql: Sql) -> None:
+    def __init__(self, sql: Sql = None) -> None:
         super().__init__()
         self.sql = sql
 
@@ -118,9 +118,12 @@ class Database:
 
     def _get_metadata(self) -> Metadata:
         try:
-            meta = self.cache.setdefault(self.name, Metadata(sql=self.sql))
+            meta = self.cache.setdefault(self.name, Metadata())
         except Exception:
-            meta = Metadata(sql=self.sql)
+            meta = None
+
+        if not (isinstance(meta, Metadata) and isinstance(meta.tables, immutabledict)):
+            meta = Metadata()
 
         meta.bind, meta.sql = self.sql.engine, self.sql
 
@@ -130,8 +133,8 @@ class Database:
 
         return meta
 
-    def _normalize_table(self, table: Union[Model, alch.schema.Table]) -> alch.schema.Table:
-        return Maybe(table).__table__.else_(table)
+    def _normalize_table(self, table: Union[Model, alch.schema.Table, str]) -> alch.schema.Table:
+        return self.meta.tables[table] if isinstance(table, str) else Maybe(table).__table__.else_(table)
 
     def _cache_metadata(self) -> None:
         self.cache[self.name] = self.meta
