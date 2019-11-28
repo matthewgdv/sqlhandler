@@ -25,7 +25,6 @@ from subtypes import Str, Dict_, Enum
 from .utils import literalstatement
 
 
-# TODO: Find way to derive table name __tablename__ declared_attr descriptor
 # TODO: Find way to implement ONE_TO_MANY relationship by extending the previous model with a foreign key after the fact
 
 
@@ -59,9 +58,17 @@ class ModelMeta(DeclarativeMeta):
     __table_cls__ = Table
 
     def __new__(mcs, name: str, bases: tuple, namespace: dict) -> Model:
-        for key, val in absolute_namespace(bases=bases, namespace=namespace).items():
-            if isinstance(val, Relationship):
-                val.build(name=name, bases=bases, namespace=namespace, attribute=key)
+        abs_ns, table_name = absolute_namespace(bases=bases, namespace=namespace), name
+
+        relationships = {key: val for key, val in abs_ns.items() if isinstance(val, Relationship)}
+        if relationships:
+            try:
+                table_name = type(name, (), abs_ns).__tablename__
+            except AttributeError:
+                pass
+
+            for attribute, relation in relationships.items():
+                relation.build(table_name=table_name, bases=bases, namespace=namespace, attribute=attribute)
 
         return type.__new__(mcs, name, bases, namespace)
 
@@ -253,9 +260,9 @@ class Relationship:
             return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
 
     class _FutureEntity:
-        def __init__(self, name: str, bases: tuple, namespace: dict) -> None:
-            self.name, self.bases, self.namespace = Str(name).case.snake(), bases, namespace
-            self.plural = self.name.case.plural()
+        def __init__(self, table_name: str, bases: tuple, namespace: dict) -> None:
+            self.name, self.bases, self.namespace = table_name, bases, namespace
+            self.plural = Str(self.name).case.plural()
 
             pk_key, = [key for key, val in absolute_namespace(bases=bases, namespace=namespace).items() if isinstance(val, Column) and val.primary_key]
             self.pk = f"{self.name}.{pk_key}"
@@ -270,8 +277,8 @@ class Relationship:
     def __repr__(self) -> str:
         return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
 
-    def build(self, name: str, bases: tuple, namespace: dict, attribute: str) -> None:
-        self.this, self.attribute = Relationship._FutureEntity(name=name, bases=bases, namespace=namespace), attribute
+    def build(self, table_name: str, bases: tuple, namespace: dict, attribute: str) -> None:
+        self.this, self.attribute = Relationship._FutureEntity(table_name=table_name, bases=bases, namespace=namespace), attribute
         self._build_fk_columns()
         self._build_relationship()
 
