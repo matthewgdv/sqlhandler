@@ -224,6 +224,7 @@ class Relationship:
     }
 
     FK_SUFFIX = "_id"
+    ASSOCIATION_TABLE_SUFFIX = "_mapping"
 
     class Kind(Enum):
         ONE_TO_ONE, MANY_TO_ONE, MANY_TO_MANY = "one_to_one", "many_to_one", "many_to_many"
@@ -264,7 +265,7 @@ class Relationship:
 
     def __init__(self, target: Model, kind: Relationship.Kind, backref_name: str = None, association: str = None, **backref_kwargs: Any) -> None:
         self.target, self.kind, self.backref_name, self.association = Relationship._TargetEntity(target), kind, backref_name, association
-        self.backref_kwargs = Dict_({**self.DEFAULT_BACKREF_KWARGS, **self.backref_kwargs})
+        self.backref_kwargs = Dict_({**self.DEFAULT_BACKREF_KWARGS, **backref_kwargs})
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
@@ -312,6 +313,7 @@ class Relationship:
             table.create()
             return table
 
+        self.this.namespace[f"{self.target.name}{self.ASSOCIATION_TABLE_SUFFIX}"] = table
         return _defer_create_table
 
 
