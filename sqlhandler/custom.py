@@ -58,10 +58,12 @@ class ModelMeta(DeclarativeMeta):
     __table_cls__ = Table
 
     def __new__(mcs, name: str, bases: tuple, namespace: dict) -> Model:
-        abs_ns, table_name = absolute_namespace(bases=bases, namespace=namespace), name
+        abs_ns = absolute_namespace(bases=bases, namespace=namespace)
 
         relationships = {key: val for key, val in abs_ns.items() if isinstance(val, Relationship)}
         if relationships:
+            table_name = name
+
             try:
                 table_name = type(name, (), abs_ns).__tablename__
             except AttributeError:
