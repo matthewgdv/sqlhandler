@@ -16,7 +16,7 @@ from pathmagic import File
 from miscutils import lazy_property
 from iotools.misc.serializer import LostObject
 
-from .custom import Model, AutoModel, Query, Session, ForeignKey, StringLiteral, BitLiteral
+from .custom import Model, AutoModel, Query, Session, ForeignKey, Relationship, StringLiteral, BitLiteral
 from .expression import Select, Update, Insert, Delete, SelectInto
 from .utils import StoredProcedure, Script
 from .log import SqlLog
@@ -58,7 +58,7 @@ class Sql:
         self.text, self.literal = alch.text, alch.literal
         self.AND, self.OR, self.CAST, self.CASE, self.TRUE, self.FALSE = alch.and_, alch.or_, alch.cast, alch.case, alch.true(), alch.false()
 
-        self.Table, self.Column, self.Relationship, self.Backref, self.ForeignKey, self.Index, self.CheckConstraint = alch.Table, alch.Column, relationship, backref, ForeignKey, alch.Index, alch.CheckConstraint
+        self.Table, self.Column, self.ForeignKey, self.Index, self.CheckConstraint, self.Relationship, self.relationship, self.backref = alch.Table, alch.Column, ForeignKey, alch.Index, alch.CheckConstraint, Relationship, relationship, backref
         self.type, self.func, self.sqlalchemy = alch.types, alch.func, alch
 
     def __repr__(self) -> str:

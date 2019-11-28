@@ -26,6 +26,7 @@ from .utils import literalstatement
 
 
 # TODO: Find way to derive table name __tablename__ declared_attr descriptor
+# TODO: Find way to implement ONE_TO_MANY relationship by extending the previous model with a foreign key after the fact
 
 
 class Table(SuperTable):
@@ -42,48 +43,40 @@ class Table(SuperTable):
         return SuperTable.__new__(*args, **kwargs)
 
 
+class CreateTableAccessor:
+    def __init__(self, model_cls: ModelMeta) -> None:
+        self.model_cls = model_cls
+
+    def __repr__(self) -> str:
+        return str(CreateTable(self.model_cls.__table__)).strip()
+
+    def __call__(self) -> str:
+        return self.model_cls.metadata.sql.create_table(self.model_cls)
+
+
 class ModelMeta(DeclarativeMeta):
     __table__ = None
     __table_cls__ = Table
 
     def __new__(mcs, name: str, bases: tuple, namespace: dict) -> Model:
-        relationships = {key: val for key, val in namespace.items() if isinstance(val, Relationship)}
-        if relationships:
-            name = mcs._find_table_name(name=name, bases=bases, namespace=namespace)
-            for key, val in relationships.items():
-                val.build(namespace=namespace, table_name=name, attribute=key)
+        for key, val in absolute_namespace(bases=bases, namespace=namespace).items():
+            if isinstance(val, Relationship):
+                val.build(name=name, bases=bases, namespace=namespace, attribute=key)
 
         return type.__new__(mcs, name, bases, namespace)
 
     def __repr__(cls) -> str:
         return cls.__name__ if cls.__table__ is None else f"{cls.__name__}({', '.join([f'{col.key}={type(col.type).__name__}' for col in cls.__table__.columns])})"
 
-    def __str__(cls) -> str:
-        return cls.__name__ if cls.__table__ is None else str(CreateTable(cls.__table__)).strip()
-
-    @staticmethod
-    def _find_table_name(name: str, bases: tuple, namespace: dict) -> str:
-        if "__tablename__" in namespace:
-            item = namespace["__tablename__"]
-        else:
-            for base in bases:
-                if "__tablename__" in vars(base):
-                    item = base.__tablename__
-                    break
-            else:
-                item = name
-
-        if isinstance(item, str):
-            return item
-        elif callable(item):
-            raise NotImplementedError
-        else:
-            return name
-
     @property
     def query(cls: Model) -> Query:
         """Create a new Query operating on this class."""
         return cls.metadata.bind.sql.session.query(cls)
+
+    @property
+    def create(cls: Model) -> None:
+        """Create the table mapped to this class."""
+        return CreateTableAccessor(cls)
 
     @property
     def c(cls: Model) -> ImmutableColumnCollection:
@@ -93,10 +86,6 @@ class ModelMeta(DeclarativeMeta):
     def alias(cls: Model, name: str, **kwargs: Any) -> AliasedClass:
         """Create a new class that is an alias of this one, with the given name."""
         return alch.orm.aliased(cls, name=name, **kwargs)
-
-    def create(cls: Model) -> None:
-        """Create the table mapped to this class."""
-        cls.metadata.sql.create_table(cls)
 
     def drop(cls: Model) -> None:
         """Drop the table mapped to this class."""
@@ -230,7 +219,10 @@ class ForeignKey(alch.ForeignKey):
 
 
 class Relationship:
-    CASCADE = "all"
+    DEFAULT_BACKREF_KWARGS = {
+        "cascade": "all"
+    }
+
     FK_SUFFIX = "_id"
 
     class Kind(Enum):
@@ -243,12 +235,12 @@ class Relationship:
 
     class Many:
         @classmethod
-        def to_one(cls, target: Model, backref_name: str = None, fk_on_this: bool = True, **backref_kwargs: Any) -> Relationship:
-            return Relationship(target=target, kind=Relationship.Kind.MANY_TO_ONE, backref_name=backref_name, relationship_kwargs=Dict_(fk_on_this=fk_on_this), **backref_kwargs)
+        def to_one(cls, target: Model, backref_name: str = None, **backref_kwargs: Any) -> Relationship:
+            return Relationship(target=target, kind=Relationship.Kind.MANY_TO_ONE, backref_name=backref_name, **backref_kwargs)
 
         @classmethod
         def to_many(cls, target: Model, backref_name: str = None, association: str = None, **backref_kwargs: Any) -> Relationship:
-            return Relationship(target=target, kind=Relationship.Kind.MANY_TO_MANY, backref_name=backref_name, relationship_kwargs=Dict_(association=association), **backref_kwargs)
+            return Relationship(target=target, kind=Relationship.Kind.MANY_TO_MANY, backref_name=backref_name, association=association, **backref_kwargs)
 
     class _TargetEntity:
         def __init__(self, model: Model) -> None:
@@ -260,21 +252,25 @@ class Relationship:
             return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
 
     class _FutureEntity:
-        def __init__(self, namespace: dict, table_name: str) -> None:
-            self.namespace, self.name = namespace, table_name
-            self.plural = Str(self.name).case.plural()
+        def __init__(self, name: str, bases: tuple, namespace: dict) -> None:
+            self.name, self.bases, self.namespace = Str(name).case.snake(), bases, namespace
+            self.plural = self.name.case.plural()
+
+            pk_key, = [key for key, val in absolute_namespace(bases=bases, namespace=namespace).items() if isinstance(val, Column) and val.primary_key]
+            self.pk = f"{self.name}.{pk_key}"
 
         def __repr__(self) -> str:
             return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
 
-    def __init__(self, target: Model, kind: Relationship.Kind, backref_name: str = None, relationship_kwargs: dict = None, **backref_kwargs: Any) -> None:
-        self.target, self.kind, self.backref_name, self.relationship_kwargs, self.backref_kwargs = Relationship._TargetEntity(target), kind, backref_name, relationship_kwargs, Dict_(backref_kwargs)
+    def __init__(self, target: Model, kind: Relationship.Kind, backref_name: str = None, association: str = None, **backref_kwargs: Any) -> None:
+        self.target, self.kind, self.backref_name, self.association = Relationship._TargetEntity(target), kind, backref_name, association
+        self.backref_kwargs = Dict_({**self.DEFAULT_BACKREF_KWARGS, **self.backref_kwargs})
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
 
-    def build(self, namespace: dict, table_name: str, attribute: str) -> None:
-        self.this, self.attribute = Relationship._FutureEntity(namespace=namespace, table_name=table_name), attribute
+    def build(self, name: str, bases: tuple, namespace: dict, attribute: str) -> None:
+        self.this, self.attribute = Relationship._FutureEntity(name=name, bases=bases, namespace=namespace), attribute
         self._build_fk_columns()
         self._build_relationship()
 
@@ -282,9 +278,7 @@ class Relationship:
         if self.kind == Relationship.Kind.MANY_TO_ONE:
             self.this.namespace[self.target.fk] = Column(Integer, ForeignKey(self.target.pk))
         elif self.kind == Relationship.Kind.ONE_TO_ONE:
-            self.this.namespace[self.target.fk] = Column(Integer, ForeignKey(self.target.pk, unique=True))
-        elif self.kind == Relationship.Kind.MANY_TO_MANY:
-            self.this.namespace[self.target.fk] = Column(Integer, ForeignKey(self.target.pk))
+            self.this.namespace[self.target.fk] = Column(Integer, ForeignKey(self.target.pk), unique=True)
         else:
             Relationship.Kind.raise_if_not_a_member(self.kind)
 
@@ -302,18 +296,23 @@ class Relationship:
         if self.kind == Relationship.Kind.ONE_TO_ONE:
             self.backref_kwargs.uselist = False
 
-        if self.kind == Relationship.Kind.MANY_TO_MANY:
-            self.backref_kwargs.secondary = self._build_association_table()
+        secondary = self._build_association_table() if self.kind == Relationship.Kind.MANY_TO_MANY else None
 
-        if "cascade" not in self.backref_kwargs:
-            self.backref_kwargs.cascade = Relationship.CASCADE
-
-        self.this.namespace[self.attribute] = relationship(self.target.model, backref=backref(name=backref_name, **self.backref_kwargs))
+        self.this.namespace[self.attribute] = relationship(self.target.model, secondary=secondary, backref=backref(name=backref_name, **self.backref_kwargs))
 
     def _build_association_table(self) -> Table:
-        association = self.relationship_kwargs.association if self.relationship_kwargs.association else f"association__{self.this.name}__{self.target.name}"
-        this_col, target_col = Column(f"{self.this.name}_id", Integer, ForeignKey(self.this.pk)), Column(f"{self.target.name}_id", Integer, ForeignKey(self.target.pk))
-        return Table(association, self.target.model.metadata, this_col, target_col)
+        if self.association is not None:
+            table = self.association
+        else:
+            name = f"association__{self.this.name}__{self.target.name}"
+            this_col, target_col = Column(f"{self.this.name}_id", Integer, ForeignKey(self.this.pk)), Column(f"{self.target.name}_id", Integer, ForeignKey(self.target.pk))
+            table = Table(name, self.target.model.metadata, Column("id", Integer, primary_key=True), this_col, target_col)
+
+        def _defer_create_table() -> Table:
+            table.create()
+            return table
+
+        return _defer_create_table
 
 
 class StringLiteral(alch.sql.sqltypes.String):
@@ -345,3 +344,14 @@ class BitLiteral(BIT):
                 return super_processor(value)
 
         return process
+
+
+def absolute_namespace(bases: tuple, namespace: dict) -> dict:
+    absolute_namespace = {}
+    for immediate_base in reversed(bases):
+        for hierarchical_base in reversed(immediate_base.mro()):
+            absolute_namespace.update(vars(hierarchical_base))
+
+    absolute_namespace.update(namespace)
+
+    return absolute_namespace
