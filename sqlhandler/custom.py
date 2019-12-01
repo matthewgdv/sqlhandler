@@ -232,8 +232,9 @@ class Relationship:
         "cascade": "all"
     }
 
-    FK_SUFFIX = "_id"
-    ASSOCIATION_TABLE_SUFFIX = "_mapping"
+    CASING = Str.Case.SNAKE
+    FK_SUFFIX = "id"
+    ASSOCIATION_TABLE_SUFFIX = "mapping"
 
     class Kind(Enum):
         ONE_TO_ONE, MANY_TO_ONE, MANY_TO_MANY = "one_to_one", "many_to_one", "many_to_many"
@@ -253,18 +254,18 @@ class Relationship:
             return Relationship(target=target, kind=Relationship.Kind.MANY_TO_MANY, backref_name=backref_name, association=association, **backref_kwargs)
 
     class _TargetEntity:
-        def __init__(self, model: Model) -> None:
-            self.model, self.name = model, model.__table__.name
+        def __init__(self, model: Model, relationship: Relationship) -> None:
+            self.relationship, self.model, self.name = relationship, model, model.__table__.name
             self.pk, = list(self.model.__table__.primary_key)
-            self.fk = f"{self.name}{Relationship.FK_SUFFIX}"
+            self.fk = self.relationship._casing(f"{self.name}_{Relationship.FK_SUFFIX}")
 
         def __repr__(self) -> str:
             return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
 
     class _FutureEntity:
-        def __init__(self, table_name: str, bases: tuple, namespace: dict) -> None:
-            self.name, self.bases, self.namespace = table_name, bases, namespace
-            self.plural = Str(self.name).case.plural()
+        def __init__(self, table_name: str, bases: tuple, namespace: dict, relationship: Relationship) -> None:
+            self.relationship, self.name, self.bases, self.namespace = relationship, table_name, bases, namespace
+            self.plural = str(Str(self.name).case.plural())
 
             pk_key, = [key for key, val in absolute_namespace(bases=bases, namespace=namespace).items() if isinstance(val, Column) and val.primary_key]
             self.pk = f"{self.name}.{pk_key}"
@@ -273,14 +274,14 @@ class Relationship:
             return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
 
     def __init__(self, target: Model, kind: Relationship.Kind, backref_name: str = None, association: str = None, **backref_kwargs: Any) -> None:
-        self.target, self.kind, self.backref_name, self.association = Relationship._TargetEntity(target), kind, backref_name, association
+        self.target, self.kind, self.backref_name, self.association = Relationship._TargetEntity(model=target, relationship=self), kind, backref_name, association
         self.backref_kwargs = Dict_({**self.DEFAULT_BACKREF_KWARGS, **backref_kwargs})
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
 
     def build(self, table_name: str, bases: tuple, namespace: dict, attribute: str) -> None:
-        self.this, self.attribute = Relationship._FutureEntity(table_name=table_name, bases=bases, namespace=namespace), attribute
+        self.this, self.attribute = Relationship._FutureEntity(table_name=table_name, bases=bases, namespace=namespace, relationship=self), attribute
         self._build_fk_columns()
         self._build_relationship()
 
@@ -314,16 +315,22 @@ class Relationship:
         if self.association is not None:
             table = self.association
         else:
-            name = f"association__{self.this.name}__{self.target.name}"
-            this_col, target_col = Column(f"{self.this.name}_id", Integer, ForeignKey(self.this.pk)), Column(f"{self.target.name}_id", Integer, ForeignKey(self.target.pk))
-            table = Table(name, self.target.model.metadata, Column("id", Integer, primary_key=True), this_col, target_col)
+            name = self._casing(f"association_{self.this.name}_{self.target.name}")
+            this_col = Column(self._casing(f"{self.this.name}_{self.FK_SUFFIX}"), Integer, ForeignKey(self.this.pk))
+            target_col = Column(self._casing(f"{self.target.name}_{self.FK_SUFFIX}"), Integer, ForeignKey(self.target.pk))
+            table = Table(name, self.target.model.metadata, Column(self._casing("id"), Integer, primary_key=True), this_col, target_col)
+
+        self.this.namespace[self._casing(f"{self.target.name}_{self.ASSOCIATION_TABLE_SUFFIX}")] = table
+        setattr(self.target.model, self._casing(f"{self.this.name}_{self.ASSOCIATION_TABLE_SUFFIX}"), table)
 
         def _defer_create_table() -> Table:
             table.create()
             return table
 
-        self.this.namespace[f"{self.target.name}{self.ASSOCIATION_TABLE_SUFFIX}"] = table
         return _defer_create_table
+
+    def _casing(self, text: str) -> str:
+        return str(Str(text).case.from_enum(self.CASING))
 
 
 class StringLiteral(alch.sql.sqltypes.String):
