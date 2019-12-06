@@ -21,7 +21,7 @@ from .expression import Select, Update, Insert, Delete, SelectInto
 from .utils import StoredProcedure, Script
 from .log import SqlLog
 from .database import Database, Schemas
-from .config import Config
+from .config import Config, Url
 
 if TYPE_CHECKING:
     import alembic
@@ -39,6 +39,8 @@ class Sql:
 
     class IfExists(Enum):
         FAIL, REPLACE, APPEND = "fail", "replace", "append"
+
+    CACHE_METADATA = True
 
     def __init__(self, connection: str = None, database: str = None, log: File = None, autocommit: bool = False) -> None:
         self.config = Config()
@@ -207,8 +209,11 @@ class Sql:
     # Private internal methods
 
     def _create_engine(self, connection: str, database: str) -> alch.engine.base.Engine:
-        url = self.config.generate_url(connection=connection, database=database)
+        url = self._create_url(connection=connection, database=database)
         return alch.create_engine(str(url), echo=False, dialect=self._create_literal_dialect(url.get_dialect()))
+
+    def _create_url(self, connection: str, database: str) -> Url:
+        return self.config.generate_url(connection=connection, database=database)
 
     def _create_literal_dialect(self, dialect_class: alch.engine.default.DefaultDialect) -> alch.engine.default.DefaultDialect:
         from sqlalchemy.dialects.mssql import dialect as mssql

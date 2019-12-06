@@ -42,7 +42,7 @@ class Database:
     _registry = Registry()
 
     def __init__(self, sql: Sql) -> None:
-        self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=sql.config.appdata.new_file("sql_cache", "pkl"), days=5)
+        self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=sql.config.folder.new_file("sql_cache", "pkl"), days=5)
         self.meta = self._get_metadata()
 
         self.model: Model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=Model, metaclass=ModelMeta, name="Model", class_registry=self._registry)
@@ -117,6 +117,9 @@ class Database:
         self.objects._add_schema(name=schema, tables=[new_meta.tables[item] for item in new_meta.tables])
 
     def _get_metadata(self) -> Metadata:
+        if not self.sql.CACHE_METADATA:
+            return Metadata(sql=self.sql)
+
         try:
             meta = self.cache.setdefault(self.name, Metadata())
         except Exception:
@@ -137,7 +140,8 @@ class Database:
         return self.meta.tables[table] if isinstance(table, str) else Maybe(table).__table__.else_(table)
 
     def _cache_metadata(self) -> None:
-        self.cache[self.name] = self.meta
+        if self.sql.CACHE_METADATA:
+            self.cache[self.name] = self.meta
 
     @staticmethod
     def _pluralize_collection(base: Any, local_cls: Any, referred_cls: Any, constraint: Any) -> str:
