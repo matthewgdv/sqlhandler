@@ -46,7 +46,7 @@ class Config(iotools.Config):
 
     def generate_url(self, connection: str = None, database: str = None) -> str:
         """Generate a sql connection URL from the current config with optional overrides passed as arguments."""
-        if connection in self.data.connections:
+        if connection is None or connection in self.data.connections:
             settings = self.data.connections[Maybe(connection).else_(self.data.default_connection)]
             database = Maybe(database).else_(settings.default_database)
             return Url(drivername=settings.drivername, database=database, username=settings.username, password=settings.password, host=settings.host, port=settings.port, query=Maybe(settings.query).else_(None))

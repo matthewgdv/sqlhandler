@@ -221,6 +221,10 @@ class Query(alch.orm.Query):
         """Simple alias for the '.update()' method, with the default 'synchronize_session' argument set to 'fetch', rather than 'evaluate'. Check that method for documentation."""
         return super().update(values, synchronize_session=synchronize_session)
 
+    def delete(self, synchronize_session: Any = "fetch") -> int:
+        """Simple alias for the '.delete()' method, with the default 'synchronize_session' argument set to 'fetch', rather than 'evaluate'. Check that method for documentation."""
+        return super().delete(synchronize_session=synchronize_session)
+
 
 class ForeignKey(alch.ForeignKey):
     def __init__(self, column: Any, *args: Any, **kwargs: Any) -> None:
