@@ -11,6 +11,7 @@ from subtypes import Dict_
 from .sql import Sql
 from .config import Url
 from .custom import Model
+from .database import Database
 import sqlhandler
 
 con = Dict_()
@@ -48,9 +49,14 @@ class DjangoModel(Model):
         return self.django.objects.get(pk=getattr(self, list(self.__table__.primary_key)[0].name))
 
 
+class DjangoDatabase(Database):
+    pass
+
+
 class DjangoSql(Sql):
     CACHE_METADATA = False
-    MODEL_CLS = DjangoModel
+    constructors = Sql.Constructors()
+    constructors.Model, constructors.Database = DjangoModel, DjangoDatabase
 
     SQLALCHEMY_ENGINES = {
         "sqlite3": "sqlite",

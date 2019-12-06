@@ -20,7 +20,7 @@ from .custom import ModelMeta, Model, AutoModel, Query, Session, ForeignKey, Rel
 from .expression import Select, Update, Insert, Delete, SelectInto
 from .utils import StoredProcedure, Script
 from .log import SqlLog
-from .database import Database, Schemas
+from .database import Database, Schemas, Metadata
 from .config import Config, Url
 
 if TYPE_CHECKING:
@@ -40,25 +40,29 @@ class Sql:
     class IfExists(Enum):
         FAIL, REPLACE, APPEND = "fail", "replace", "append"
 
+    class Constructors:
+        Database, ModelMeta, Model, AutoModel = Database, ModelMeta, Model, AutoModel
+        Config, Query, Session, Metadata = Config, Query, Session, Metadata
+        StoredProcedure, Script = StoredProcedure, Script
+        Frame = Frame
+
+    constructors = Constructors()
+
     CACHE_METADATA = True
-    MODEL_MCS = ModelMeta
-    MODEL_CLS = Model
-    AUTO_MODEL_CLS = AutoModel
 
     def __init__(self, connection: str = None, database: str = None, log: File = None, autocommit: bool = False) -> None:
-        self.config = Config()
+        self.config = self.constructors.Config()
 
         self.engine = self._create_engine(connection=connection, database=database)
         self.engine.sql = self
 
-        self.session = Session(bind=self.engine, query_cls=Query)
-        self.database = Database(self)
+        self.session = self.constructors.Session(bind=self.engine, query_cls=self.constructors.Query)
+        self.database = self.constructors.Database(self)
 
         self.log, self.autocommit = log, autocommit
 
-        self.Select, self.SelectInto, self.Update = Select, SelectInto, Update
-        self.Insert, self.Delete = Insert, Delete
-        self.StoredProcedure, self.Script = StoredProcedure.from_sql(self), Script.from_sql(self)
+        self.Select, self.SelectInto, self.Update, self.Insert, self.Delete = Select, SelectInto, Update, Insert, Delete
+        self.StoredProcedure, self.Script = self.constructors.StoredProcedure.from_sql(self), self.constructors.Script.from_sql(self)
 
         self.text, self.literal = alch.text, alch.literal
         self.AND, self.OR, self.CAST, self.CASE, self.TRUE, self.FALSE = alch.and_, alch.or_, alch.cast, alch.case, alch.true(), alch.false()
@@ -134,17 +138,17 @@ class Sql:
 
         result = self.session.execute(query.statement)
         cols = [col[0] for col in result.cursor.description]
-        frame = Frame(result.fetchall(), columns=cols)
+        frame = self.constructors.Frame(result.fetchall(), columns=cols)
 
         return frame
 
     def plaintext_query_to_frame(self, query: str) -> Frame:
         """Convert plaintext SQL to a pandas DataFrame. The SQL statement must be a SELECT that returns rows."""
-        return Frame(pd.read_sql_query(query, self.engine))
+        return self.constructors.Frame(pd.read_sql_query(query, self.engine))
 
     def table_to_frame(self, table: str, schema: str = None) -> Frame:
         """Reads the target table or view (from the specified schema) into a pandas DataFrame."""
-        return Frame(pd.read_sql_table(table, self.engine, schema=schema))
+        return self.constructors.Frame(pd.read_sql_table(table, self.engine, schema=schema))
 
     def excel_to_table(self, filepath: os.PathLike, table: str = "temp", schema: str = None, if_exists: Sql.IfExists = IfExists.FAIL, primary_key: str = "id", **kwargs: Any) -> Model:
         """Bulk insert the content of the target '.xlsx' file to the specified table."""
@@ -152,7 +156,7 @@ class Sql:
 
     def frame_to_table(self, dataframe: pd.DataFrame, table: str, schema: str = None, if_exists: Sql.IfExists = IfExists.FAIL, primary_key: str = "id") -> Model:
         """Bulk insert the content of a pandas DataFrame to the specified table."""
-        dataframe = Frame(dataframe)
+        dataframe = self.constructors.Frame(dataframe)
 
         has_identity_pk = False
         if primary_key is None:
@@ -179,8 +183,7 @@ class Sql:
         self.refresh_table(table=table_object)
         return self.orm[schema][table]
 
-    @staticmethod
-    def orm_to_frame(orm_objects: Any) -> Frame:
+    def orm_to_frame(self, orm_objects: Any) -> Frame:
         """Convert a homogeneous list of sqlalchemy.orm instance objects (or a single one) to a pandas DataFrame."""
         if not isinstance(orm_objects, list):
             orm_objects = [orm_objects]
@@ -191,7 +194,7 @@ class Sql:
         cols = [col.name for col in list(type(orm_objects[0]).__table__.columns)]
         vals = [[getattr(item, col) for col in cols] for item in orm_objects]
 
-        return Frame(vals, columns=cols)
+        return self.constructors.Frame(vals, columns=cols)
 
     def create_table(self, table: Union[Model, alch.schema.Table]) -> None:
         """Drop a table or the table belonging to an ORM class and remove it from the metadata."""
