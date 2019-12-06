@@ -35,13 +35,13 @@ class SqlHandlerConfig(AppConfig):
 
 
 class DjangoModelMixin:
-    sql: Type[BoundModel] = None
+    sql: Type[DjangoModel] = None
 
-    def __call__(self) -> BoundModel:
+    def __call__(self) -> DjangoModel:
         return self.sql.query.get(getattr(self, self._meta.pk.name))
 
 
-class BoundModel(Model):
+class DjangoModel(Model):
     django: Type[DjangoModelMixin] = None
 
     def __call__(self) -> DjangoModelMixin:
@@ -50,7 +50,7 @@ class BoundModel(Model):
 
 class DjangoSql(Sql):
     CACHE_METADATA = False
-    MODEL_CLS = BoundModel
+    MODEL_CLS = DjangoModel
 
     SQLALCHEMY_ENGINES = {
         "sqlite3": "sqlite",
