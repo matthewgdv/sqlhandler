@@ -12,7 +12,7 @@ from maybe import Maybe
 from subtypes import Str, NameSpace
 from iotools import Cache
 
-from .custom import Model, AutoModel, ModelMeta
+from .custom import Model, AutoModel
 
 if TYPE_CHECKING:
     from .sql import Sql
@@ -45,8 +45,8 @@ class Database:
         self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=sql.config.folder.new_file("sql_cache", "pkl"), days=5)
         self.meta = self._get_metadata()
 
-        self.model: Model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=Model, metaclass=ModelMeta, name="Model", class_registry=self._registry)
-        self.auto_model: AutoModel = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=AutoModel, metaclass=ModelMeta, name="AutoModel", class_registry=self._registry)
+        self.model: Model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.MODEL_CLS, metaclass=self.sql.MODEL_MCS, name=self.sql.MODEL_CLS.__name__, class_registry=self._registry)
+        self.auto_model: AutoModel = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.AUTO_MODEL_CLS, metaclass=self.sql.MODEL_MCS, name=self.sql.AUTO_MODEL_CLS.__name__, class_registry=self._registry)
 
         self.orm, self.objects = Schemas(database=self), Schemas(database=self)
         self.default_schema_name = vars(self.sql.engine.dialect).get("schema_name", "default")
@@ -108,7 +108,7 @@ class Database:
         schema = None if schema == self.default_schema_name else schema
 
         new_meta = self.meta.copy_schema_subset(schema)
-        model = declarative_base(bind=self.sql.engine, metadata=new_meta, metaclass=ModelMeta, name="Model", cls=Model, class_registry=self._registry)
+        model = declarative_base(bind=self.sql.engine, metadata=new_meta, cls=self.sql.MODEL_CLS, metaclass=self.sql.MODEL_MCS, name=self.sql.MODEL_CLS.__name__, class_registry=self._registry)
 
         automap = automap_base(declarative_base=model)
         automap.prepare(name_for_collection_relationship=self._pluralize_collection)

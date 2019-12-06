@@ -16,7 +16,7 @@ from pathmagic import File
 from miscutils import lazy_property
 from iotools.misc.serializer import LostObject
 
-from .custom import Model, AutoModel, Query, Session, ForeignKey, Relationship, StringLiteral, BitLiteral
+from .custom import ModelMeta, Model, AutoModel, Query, Session, ForeignKey, Relationship, StringLiteral, BitLiteral
 from .expression import Select, Update, Insert, Delete, SelectInto
 from .utils import StoredProcedure, Script
 from .log import SqlLog
@@ -41,6 +41,9 @@ class Sql:
         FAIL, REPLACE, APPEND = "fail", "replace", "append"
 
     CACHE_METADATA = True
+    MODEL_MCS = ModelMeta
+    MODEL_CLS = Model
+    AUTO_MODEL_CLS = AutoModel
 
     def __init__(self, connection: str = None, database: str = None, log: File = None, autocommit: bool = False) -> None:
         self.config = Config()
