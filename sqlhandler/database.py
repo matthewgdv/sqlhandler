@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Union, TYPE_CHECKING
+from typing import Any, Union, Set, TYPE_CHECKING
 import copy
 
 import sqlalchemy as alch
@@ -18,51 +18,45 @@ if TYPE_CHECKING:
     from .sql import Sql
 
 
-class Metadata(alch.MetaData):
-    def __init__(self, sql: Sql = None) -> None:
-        super().__init__()
-        self.sql = sql
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(tables={repr([*self.tables])})"
-
-    def copy_schema_subset(self, schema: str) -> Metadata:
-        shallow = copy.copy(self)
-        shallow.sql, shallow.tables = self.sql, immutabledict({name: table for name, table in self.tables.items() if (schema or "") == (table.schema or "")})
-        return shallow
-
-
-class Registry(dict):
+class NullRegistry(dict):
     def __setitem__(self, key: Any, val: Any) -> None:
         pass
 
 
 class Database:
     """A class representing a sql database. Abstracts away database reflection and metadata caching. The cache lasts for 5 days but can be cleared with Database.clear()"""
-    _registry = Registry()
+    _registry = NullRegistry()
 
     def __init__(self, sql: Sql) -> None:
         self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=sql.config.folder.new_file("sql_cache", "pkl"), days=5)
+
+        self.default_schema = Maybe(self.sql.engine.dialect).default_schema_name.else_("default")
+        self.schemas = self.schema_names()
+
         self.meta = self._get_metadata()
 
         self.model: Model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.constructors.Model, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.Model.__name__, class_registry=self._registry)
         self.auto_model: AutoModel = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.constructors.AutoModel, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.AutoModel.__name__, class_registry=self._registry)
 
-        self.orm, self.objects = Schemas(database=self), Schemas(database=self)
-        self.default_schema_name = vars(self.sql.engine.dialect).get("schema_name", "default")
-
-        for schema in {self.meta.tables[table].schema for table in self.meta.tables}:
-            self._add_schema_to_namespaces(schema)
+        self.orm, self.objects = OrmSchemas(database=self), ObjectSchemas(database=self)
+        for schema in {table.schema for table in self.meta.tables.values()}:
+            self._add_schema_to_namespaces(SchemaName(schema, default=self.default_schema))
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name={repr(self.name)}, orm={repr(self.orm)}, objects={repr(self.objects)}, cache={repr(self.cache)})"
 
+    def schema_names(self) -> Set[SchemaName]:
+        return {SchemaName(name=name, default=self.default_schema) for name in alch.inspect(self.sql.engine).get_schema_names()}
+
+    def table_names(self) -> Set[str]:
+        return set(sum([alch.inspect(self.sql.engine).get_table_names(schema=schema.nullable_name) for schema in self.schemas], []))
+
     def reflect(self, schema: str = None) -> None:
         """Reflect the schema with the given name and refresh the 'Database.orm' and 'Database.objects' namespaces."""
-        schema = None if schema == self.default_schema_name else schema
+        schema_name = SchemaName(schema, default=self.default_schema)
 
-        self.meta.reflect(schema=schema, views=True)
-        self._add_schema_to_namespaces(schema)
+        self.meta.reflect(schema=schema_name.nullable_name, views=True)
+        self._add_schema_to_namespaces(schema_name)
 
         self._cache_metadata()
 
@@ -104,17 +98,15 @@ class Database:
 
             self._cache_metadata()
 
-    def _add_schema_to_namespaces(self, schema: str) -> None:
-        schema = None if schema == self.default_schema_name else schema
-
-        new_meta = self.meta.copy_schema_subset(schema)
-        model = declarative_base(bind=self.sql.engine, metadata=new_meta, cls=self.sql.constructors.Model, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.Model.__name__, class_registry=self._registry)
+    def _add_schema_to_namespaces(self, schema: SchemaName) -> None:
+        new_meta = self.meta.copy_schema_subset(schema.nullable_name)
+        model = declarative_base(bind=self.sql.engine, metadata=new_meta, cls=self.sql.constructors.Model, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.Model.__name__, class_registry={})
 
         automap = automap_base(declarative_base=model)
         automap.prepare(name_for_collection_relationship=self._pluralize_collection)
 
-        self.orm._add_schema(name=schema, tables=list(automap.classes))
-        self.objects._add_schema(name=schema, tables=[new_meta.tables[item] for item in new_meta.tables])
+        self.orm[schema.name]._refresh(automap=automap, meta=new_meta)
+        self.objects[schema.name]._refresh(automap=automap, meta=new_meta)
 
     def _get_metadata(self) -> Metadata:
         if not self.sql.CACHE_METADATA:
@@ -130,9 +122,9 @@ class Database:
 
         meta.bind, meta.sql = self.sql.engine, self.sql
 
-        for table in list(meta.tables.values()):
-            if not self.exists_table(table):
-                meta.remove(table)
+        existing_tables = self.table_names()
+        for table in [table for name, table in meta.tables.items() if name not in existing_tables and "information_schema" not in table.schema.lower()]:
+            meta.remove(table)
 
         return meta
 
@@ -154,12 +146,17 @@ class Schemas(NameSpace):
     def __init__(self, database: Database) -> None:
         super().__init__()
         self._database = database
+        self._refresh()
 
     def __repr__(self) -> str:
-        return f"""{type(self).__name__}(num_schemas={len(self)}, schemas=[{", ".join([f"{type(schema).__name__}(name='{schema._name}', tables={len(schema)})" for name, schema in self])}])"""
+        return f"""{type(self).__name__}(num_schemas={len(self)}, schemas=[{", ".join([f"{type(schema).__name__}(name='{schema._name}', tables={len(schema) if schema._ready else '?'})" for name, schema in self])}])"""
+
+    def __call__(self) -> Schema:
+        self._refresh()
+        return self
 
     def __getitem__(self, name: str) -> Schema:
-        return getattr(self, self._database.default_schema_name) if name is None else super().__getitem__(name)
+        return getattr(self, self._database.default_schema) if name is None else super().__getitem__(name)
 
     def __getattr__(self, attr: str) -> Schema:
         if not attr.startswith("_"):
@@ -170,23 +167,25 @@ class Schemas(NameSpace):
         except AttributeError:
             raise AttributeError(f"{type(self._database).__name__} '{self._database.name}' has no schema '{attr}'.")
 
-    def _add_schema(self, name: str, tables: list) -> None:
-        name = Maybe(name).else_(self._database.default_schema_name)
-        if name in self:
-            self[name]._refresh_from_tables(tables)
-        else:
-            self[name] = Schema(database=self._database, name=name, tables=tables)
+    def _refresh(self) -> None:
+        super().__call__()
+        for schema in self._database.schemas:
+            self[schema.name] = self.schema_constructor(database=self._database, name=schema.name)
 
 
 class Schema(NameSpace):
     """A NameSpace class representing a database schema. Models/objects can be accessed with either attribute or item access. If the model/object isn't already cached, an attempt will be made to reflect it."""
 
-    def __init__(self, database: Database, name: str, tables: list) -> None:
-        super().__init__({Maybe(table).__table__.else_(table).name: table for table in tables})
-        self._database, self._name = database, name
+    def __init__(self, database: Database, name: str) -> None:
+        super().__init__()
+        self._database, self._name, self._ready = database, name, False
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(name={repr(self._name)}, num_tables={len(self)}, tables={[table for table, _ in self]})"
+        return f"{type(self).__name__}(name={repr(self._name)}, num_tables={len(self) if self._ready else '?'}, tables={[table for table, _ in self] if self._ready else '?'})"
+
+    def __call__(self) -> Schema:
+        self._database.reflect(self._name)
+        return self
 
     def __getattr__(self, attr: str) -> Model:
         if not attr.startswith("_"):
@@ -197,7 +196,57 @@ class Schema(NameSpace):
         except AttributeError:
             raise AttributeError(f"{type(self).__name__} '{self._name}' of {type(self._database).__name__} '{self._database.name}' has no object '{attr}'.")
 
-    def _refresh_from_tables(self, tables: list) -> None:
-        self()
-        for name, table in {Maybe(table).__table__.else_(table).name: table for table in tables}.items():
+    def _refresh(self, automap: Model, meta: Metadata) -> None:
+        raise NotImplementedError
+
+    def _pre_refresh(self) -> None:
+        super().__call__()
+        self._ready = True
+
+
+class OrmSchema(Schema):
+    def _refresh(self, automap: Model, meta: Metadata) -> None:
+        self._pre_refresh()
+        for name, table in {table.__table__.name: table for table in automap.classes}.items():
             self[name] = table
+
+
+class ObjectSchema(Schema):
+    def _refresh(self, automap: Model, meta: Metadata) -> None:
+        self._pre_refresh()
+        for name, table in {table.name: table for table in meta.tables.values()}.items():
+            self[name] = table
+
+
+class OrmSchemas(Schemas):
+    schema_constructor = OrmSchema
+
+
+class ObjectSchemas(Schemas):
+    schema_constructor = ObjectSchema
+
+
+class Metadata(alch.MetaData):
+    def __init__(self, sql: Sql = None) -> None:
+        super().__init__()
+        self.sql = sql
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(tables={len(self.tables)})"
+        # return f"{type(self).__name__}(tables={repr([*self.tables])})"
+
+    def copy_schema_subset(self, schema: str) -> Metadata:
+        shallow = copy.copy(self)
+        shallow.sql, shallow.tables = self.sql, immutabledict({name: table for name, table in self.tables.items() if (schema or "") == (table.schema or "")})
+        return shallow
+
+
+class SchemaName:
+    def __init__(self, name: str, default: str) -> None:
+        if name is None:
+            self.name, self.nullable_name = default, None
+        else:
+            self.name, self.nullable_name = name, None if name == default else name
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"

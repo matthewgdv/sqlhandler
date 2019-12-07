@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from typing import Any, Dict, Union, TYPE_CHECKING
+from typing import Any, Dict, TYPE_CHECKING
 
 
 import numpy as np
@@ -55,6 +55,7 @@ class Sql:
 
         self.engine = self._create_engine(connection=connection, database=database)
         self.engine.sql = self
+        self.engine.connect()
 
         self.session = self.constructors.Session(bind=self.engine, query_cls=self.constructors.Query)
         self.database = self.constructors.Database(self)
@@ -195,22 +196,6 @@ class Sql:
         vals = [[getattr(item, col) for col in cols] for item in orm_objects]
 
         return self.constructors.Frame(vals, columns=cols)
-
-    def create_table(self, table: Union[Model, alch.schema.Table]) -> None:
-        """Drop a table or the table belonging to an ORM class and remove it from the metadata."""
-        self.database.create_table(table)
-
-    def drop_table(self, table: Union[Model, alch.schema.Table]) -> None:
-        """Drop a table or the table belonging to an ORM class and remove it from the metadata."""
-        self.database.drop_table(table)
-
-    def refresh_table(self, table: Union[Model, alch.schema.Table]) -> None:
-        """Refresh the schema of the table passed by reflecting the database definition again."""
-        self.database.refresh_table(table=table)
-
-    def clear_metadata(self) -> None:
-        """Clear the metadata held by this Sql object's database."""
-        self.database.clear()
 
     # Private internal methods
 
