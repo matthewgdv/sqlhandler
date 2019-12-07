@@ -30,7 +30,7 @@ class Database:
     def __init__(self, sql: Sql) -> None:
         self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=sql.config.folder.new_file("sql_cache", "pkl"), days=5)
 
-        self.default_schema = Maybe(self.sql.engine.dialect).default_schema_name.else_("default")
+        self.default_schema = self.sql.engine.dialect.default_schema_name
         self.schemas = self.schema_names()
 
         self.meta = self._get_metadata()
@@ -103,7 +103,7 @@ class Database:
         model = declarative_base(bind=self.sql.engine, metadata=new_meta, cls=self.sql.constructors.Model, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.Model.__name__, class_registry={})
 
         automap = automap_base(declarative_base=model)
-        automap.prepare(name_for_collection_relationship=self._pluralize_collection)
+        automap.prepare(classname_for_table=self._table_name, name_for_scalar_relationship=self._scalar_name, name_for_collection_relationship=self._collection_name)
 
         self.orm[schema.name]._refresh(automap=automap, meta=new_meta)
         self.objects[schema.name]._refresh(automap=automap, meta=new_meta)
@@ -136,7 +136,15 @@ class Database:
             self.cache[self.name] = self.meta
 
     @staticmethod
-    def _pluralize_collection(base: Any, local_cls: Any, referred_cls: Any, constraint: Any) -> str:
+    def _table_name(base: Any, tablename: Any, table: Any) -> str:
+        return None
+
+    @staticmethod
+    def _scalar_name(base: Any, local_cls: Any, referred_cls: Any, constraint: Any) -> str:
+        return None
+
+    @staticmethod
+    def _collection_name(base: Any, local_cls: Any, referred_cls: Any, constraint: Any) -> str:
         return str(Str(referred_cls.__name__).case.snake().case.plural())
 
 
@@ -156,7 +164,7 @@ class Schemas(NameSpace):
         return self
 
     def __getitem__(self, name: str) -> Schema:
-        return getattr(self, self._database.default_schema) if name is None else super().__getitem__(name)
+        return getattr(self, SchemaName(name=name, default=self._database.default_schema).name) if name is None else super().__getitem__(name)
 
     def __getattr__(self, attr: str) -> Schema:
         if not attr.startswith("_"):
@@ -233,7 +241,6 @@ class Metadata(alch.MetaData):
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(tables={len(self.tables)})"
-        # return f"{type(self).__name__}(tables={repr([*self.tables])})"
 
     def copy_schema_subset(self, schema: str) -> Metadata:
         shallow = copy.copy(self)
@@ -243,10 +250,13 @@ class Metadata(alch.MetaData):
 
 class SchemaName:
     def __init__(self, name: str, default: str) -> None:
-        if name is None:
-            self.name, self.nullable_name = default, None
+        if default is None:
+            self.name, self.nullable_name = "main", None
         else:
-            self.name, self.nullable_name = name, None if name == default else name
+            if name is None:
+                self.name, self.nullable_name = default, None
+            else:
+                self.name, self.nullable_name = name, None if name == default else name
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"

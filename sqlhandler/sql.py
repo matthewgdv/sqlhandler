@@ -20,7 +20,7 @@ from .custom import ModelMeta, Model, AutoModel, Query, Session, ForeignKey, Rel
 from .expression import Select, Update, Insert, Delete, SelectInto
 from .utils import StoredProcedure, Script
 from .log import SqlLog
-from .database import Database, Schemas, Metadata
+from .database import Database, OrmSchemas, ObjectSchemas, OrmSchema, ObjectSchema, Metadata
 from .config import Config, Url
 
 if TYPE_CHECKING:
@@ -41,10 +41,11 @@ class Sql:
         FAIL, REPLACE, APPEND = "fail", "replace", "append"
 
     class Constructors:
-        Database, ModelMeta, Model, AutoModel = Database, ModelMeta, Model, AutoModel
-        Config, Query, Session, Metadata = Config, Query, Session, Metadata
+        ModelMeta, Model, AutoModel = ModelMeta, Model, AutoModel
+        Database, OrmSchemas, ObjectSchemas, OrmSchema, ObjectSchema, Metadata = Database, OrmSchemas, ObjectSchemas, OrmSchema, ObjectSchema, Metadata
+        Config, Query, Session = Config, Query, Session
         StoredProcedure, Script = StoredProcedure, Script
-        Frame = Frame
+        Config, Frame = Config, Frame
 
     constructors = Constructors()
 
@@ -100,12 +101,12 @@ class Sql:
         return self.database.auto_model
 
     @property
-    def orm(self) -> Schemas:
+    def orm(self) -> OrmSchemas:
         """Property controlling access to mapped models. Models will only appear for tables that have a primary key, and never for views. Schemas must be accessed before tables: E.g. Sql().orm.some_schema.some_table"""
         return self.database.orm
 
     @property
-    def objects(self) -> Schemas:
+    def objects(self) -> ObjectSchemas:
         """Property controlling access to raw database objects. Schemas must be accessed before tables: E.g. Sql().orm.some_schema.some_table"""
         return self.database.objects
 
