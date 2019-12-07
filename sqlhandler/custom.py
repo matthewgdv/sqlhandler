@@ -50,7 +50,7 @@ class CreateTableAccessor:
         return str(CreateTable(self.model_cls.__table__)).strip()
 
     def __call__(self) -> str:
-        return self.model_cls.metadata.sql.create_table(self.model_cls)
+        return self.model_cls.metadata.sql.database.create_table(self.model_cls)
 
 
 class ModelMeta(DeclarativeMeta):
@@ -98,7 +98,7 @@ class ModelMeta(DeclarativeMeta):
 
     def drop(cls: Model) -> None:
         """Drop the table mapped to this class."""
-        cls.metadata.sql.drop_table(cls)
+        cls.metadata.sql.database.drop_table(cls)
 
 
 class Model:

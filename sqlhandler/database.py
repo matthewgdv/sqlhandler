@@ -137,11 +137,11 @@ class Database:
 
     @staticmethod
     def _table_name(base: Any, tablename: Any, table: Any) -> str:
-        return None
+        return tablename
 
     @staticmethod
     def _scalar_name(base: Any, local_cls: Any, referred_cls: Any, constraint: Any) -> str:
-        return None
+        return referred_cls.__name__
 
     @staticmethod
     def _collection_name(base: Any, local_cls: Any, referred_cls: Any, constraint: Any) -> str:
