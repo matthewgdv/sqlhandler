@@ -11,7 +11,7 @@ from sqlalchemy import create_engine
 
 class Dialect(ValueEnum):
     """Enum of known dialect drivers."""
-    MS_SQL, MY_SQL, SQLITE, POSTGRESQL, ORACLE = "mssql", "mysql", "sqlite", "posgresql", "oracle"
+    MS_SQL, MY_SQL, SQLITE, POSTGRESQL, ORACLE = "mssql", "mysql", "sqlite", "postgresql+psycopg2", "oracle"
 
 
 class Url(URL):
