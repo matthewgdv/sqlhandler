@@ -6,23 +6,25 @@ import pandas as pd
 
 import sqlalchemy as alch
 
+from sqlalchemy import Table as SuperTable, Column, true, null, func
+from sqlalchemy import types
+
 from sqlalchemy.schema import CreateTable
+
+from sqlalchemy.sql.base import ImmutableColumnCollection
+from sqlalchemy.sql.schema import _get_table_key
 
 from sqlalchemy.orm.util import AliasedClass
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.orm import backref, relationship
 
-from sqlalchemy.sql.base import ImmutableColumnCollection
-from sqlalchemy.dialects.mssql import BIT
 from sqlalchemy.ext.declarative import declared_attr, DeclarativeMeta
-from sqlalchemy.sql.schema import _get_table_key
 
-from sqlalchemy import Table as SuperTable, Column, true, null, func
-from sqlalchemy.types import Integer, String, Boolean, DateTime
 
 from subtypes import Str, Dict_, Enum
 
 from .utils import literalstatement
+from .override import SubtypesDateTime
 
 
 # TODO: Find way to implement ONE_TO_MANY relationship by extending the previous model with a foreign key after the fact
@@ -154,20 +156,20 @@ class AutoModel(Model):
     def __tablename__(cls):
         return str(Str(cls.__name__).case.snake())
 
-    id = Column(Integer, primary_key=True)
-    name = Column(String(50), nullable=True, server_default=null())
+    id = Column(types.Integer, primary_key=True)
+    name = Column(types.String(50), nullable=True, server_default=null())
 
     @declared_attr
     def created(cls):
-        return Column(DateTime, nullable=False, server_default=func.NOW())
+        return Column(SubtypesDateTime, nullable=False, server_default=func.NOW())
 
     @declared_attr
     def modified(cls):
-        return Column(DateTime, nullable=False, server_default=func.NOW(), onupdate=func.NOW())
+        return Column(SubtypesDateTime, nullable=False, server_default=func.NOW(), onupdate=func.NOW())
 
     @declared_attr
     def active(cls):
-        return Column(Boolean, nullable=False, server_default=true())
+        return Column(types.Boolean, nullable=False, server_default=true())
 
 
 class Session(alch.orm.Session):
@@ -291,9 +293,9 @@ class Relationship:
 
     def _build_fk_columns(self) -> None:
         if self.kind == Relationship.Kind.MANY_TO_ONE:
-            self.this.namespace[self.target.fk] = Column(Integer, ForeignKey(self.target.pk))
+            self.this.namespace[self.target.fk] = Column(types.Integer, ForeignKey(self.target.pk))
         elif self.kind == Relationship.Kind.ONE_TO_ONE:
-            self.this.namespace[self.target.fk] = Column(Integer, ForeignKey(self.target.pk), unique=True)
+            self.this.namespace[self.target.fk] = Column(types.Integer, ForeignKey(self.target.pk), unique=True)
         else:
             Relationship.Kind.raise_if_not_a_member(self.kind)
 
@@ -320,9 +322,9 @@ class Relationship:
             table = self.association
         else:
             name = self._casing(f"association_{self.this.name}_{self.target.name}")
-            this_col = Column(self._casing(f"{self.this.name}_{self.FK_SUFFIX}"), Integer, ForeignKey(self.this.pk))
-            target_col = Column(self._casing(f"{self.target.name}_{self.FK_SUFFIX}"), Integer, ForeignKey(self.target.pk))
-            table = Table(name, self.target.model.metadata, Column(self._casing("id"), Integer, primary_key=True), this_col, target_col)
+            this_col = Column(self._casing(f"{self.this.name}_{self.FK_SUFFIX}"), types.Integer, ForeignKey(self.this.pk))
+            target_col = Column(self._casing(f"{self.target.name}_{self.FK_SUFFIX}"), types.Integer, ForeignKey(self.target.pk))
+            table = Table(name, self.target.model.metadata, Column(self._casing("id"), types.Integer, primary_key=True), this_col, target_col)
 
         self.this.namespace[self._casing(f"{self.target.name}_{self.ASSOCIATION_TABLE_SUFFIX}")] = table
         setattr(self.target.model, self._casing(f"{self.this.name}_{self.ASSOCIATION_TABLE_SUFFIX}"), table)
@@ -335,37 +337,6 @@ class Relationship:
 
     def _casing(self, text: str) -> str:
         return str(Str(text).case.from_enum(self.CASING))
-
-
-class StringLiteral(alch.sql.sqltypes.String):
-    def literal_processor(self, dialect: Any) -> Any:
-        super_processor = super().literal_processor(dialect)
-
-        def process(value: Any) -> Any:
-            if value is None:
-                return "NULL"
-
-            result = super_processor(str(value))
-            if isinstance(result, bytes):
-                result = result.decode(dialect.encoding)
-
-            return result
-        return process
-
-
-class BitLiteral(BIT):
-    def literal_processor(self, dialect: Any) -> Any:
-        super_processor = super().literal_processor(dialect)
-
-        def process(value: Any) -> Any:
-            if isinstance(value, bool):
-                return str(1) if value else str(0)
-            elif isinstance(value, int) and value in (0, 1):
-                return value
-            else:
-                return super_processor(value)
-
-        return process
 
 
 def absolute_namespace(bases: tuple, namespace: dict) -> dict:
