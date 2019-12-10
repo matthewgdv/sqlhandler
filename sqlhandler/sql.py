@@ -7,9 +7,13 @@ from typing import Any, Dict, TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
+import pyodbc
+
 import sqlalchemy as alch
 from sqlalchemy.orm import backref, relationship
-import pyodbc
+
+from sqlalchemy.dialects import mssql
+
 
 from subtypes import Frame, Enum
 from pathmagic import File
@@ -17,7 +21,7 @@ from miscutils import lazy_property
 from iotools.misc.serializer import LostObject
 
 from .custom import ModelMeta, Model, AutoModel, Query, Session, ForeignKey, Relationship
-from .override import SubtypesDateTime, SubtypesDate, StringLiteral, BitLiteral
+from .override import SubtypesDateTime, SubtypesDate, BitLiteral
 from .expression import Select, Update, Insert, Delete, SelectInto
 from .utils import StoredProcedure, Script
 from .log import SqlLog
@@ -204,35 +208,26 @@ class Sql:
 
     def _create_engine(self, connection: str, database: str) -> alch.engine.base.Engine:
         url = self._create_url(connection=connection, database=database)
-        return alch.create_engine(str(url), echo=False, dialect=self._create_literal_dialect(url.get_dialect()))
+        return alch.create_engine(str(url), echo=False, dialect=self._customize_dialect(url.get_dialect()()))
 
     def _create_url(self, connection: str, database: str) -> Url:
         return self.config.generate_url(connection=connection, database=database)
 
-    def _create_literal_dialect(self, dialect_class: alch.engine.default.DefaultDialect) -> alch.engine.default.DefaultDialect:
-        from sqlalchemy.dialects.mssql import dialect as mssql
-        from sqlalchemy.dialects.sqlite import dialect as sqlite
+    def _customize_dialect(self, dialect: alch.engine.default.DefaultDialect) -> alch.engine.default.DefaultDialect:
+        dialect.colspecs.update(
+            {
+                alch.types.DateTime: SubtypesDateTime,
+                alch.types.DATETIME: SubtypesDateTime,
+                alch.types.Date: SubtypesDate,
+                alch.types.DATE: SubtypesDate,
+            }
+        )
 
-        class LiteralDialect(dialect_class):
-            supports_multivalues_insert = True
+        if isinstance(dialect, mssql.dialect):
+            dialect.supports_multivalues_insert = True
+            dialect.colspecs.update({alch.dialects.mssql.BIT: BitLiteral})
 
-            def __init__(self, *args: Any, **kwargs: Any) -> None:
-                super().__init__(*args, **kwargs)
-                self.colspecs.update(
-                    {
-                        alch.sql.sqltypes.String: StringLiteral,
-                        alch.sql.sqltypes.DateTime: StringLiteral,
-                        alch.sql.sqltypes.DATETIME: StringLiteral,
-                        alch.sql.sqltypes.Date: StringLiteral,
-                        alch.sql.sqltypes.DATE: StringLiteral,
-                        alch.sql.sqltypes.NullType: StringLiteral,
-                    }
-                )
-
-                if dialect_class in (mssql, sqlite):
-                    self.colspecs.update({alch.dialects.mssql.BIT: BitLiteral})
-
-        return LiteralDialect()
+        return dialect
 
     @staticmethod
     def _sql_dtype_dict_from_frame(frame: Frame) -> Dict[str, Any]:

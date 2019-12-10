@@ -81,7 +81,16 @@ class SqlModel(SqlHandlerConfig.Sql.constructors.Model, SqlHandlerConfig.setting
         return self.django.objects.get(pk=getattr(self, list(self.__table__.primary_key)[0].name))
 
 
-class DjangoOrmSchemas(SqlHandlerConfig.Sql.constructors.OrmSchemas):
+class DjangoApp(SqlHandlerConfig.Sql.constructors.OrmSchema):
+    pass
+
+
+class DjangoApps(SqlHandlerConfig.Sql.constructors.OrmSchemas):
+    schema_constructor = DjangoApp
+
+    def __repr__(self) -> str:
+        return f"""{type(self).__name__}(num_apps={len(self)}, apps=[{", ".join([f"{type(schema).__name__}(name='{schema._name}', tables={len(schema) if schema._ready else '?'})" for name, schema in self])}])"""
+
     def _refresh(self) -> None:
         pass
 
@@ -98,8 +107,11 @@ class DjangoDatabase(SqlHandlerConfig.Sql.constructors.Database):
     model_mappings: dict = None
 
     def __init__(self, sql: DjangoSql) -> None:
-        self.django = DjangoOrmSchemas(database=self)
+        self.django = DjangoApps(database=self)
         super().__init__(sql=sql)
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}(name={repr(self.name)}, django={repr(self.django)})"
 
     @staticmethod
     def _table_name(base: Any, tablename: Any, table: Any) -> str:
@@ -121,7 +133,7 @@ class DjangoSql(SqlHandlerConfig.Sql):
     constructors.Model, constructors.Database = SqlModel, DjangoDatabase
 
     @property
-    def django(self) -> DjangoOrmSchemas:
+    def django(self) -> DjangoApps:
         return self.database.django
 
     def _create_url(self, connection: str, **kwargs: Any) -> Url:
