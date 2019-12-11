@@ -9,7 +9,7 @@ class BitLiteral(types.TypeDecorator):
     impl = types.DateTime
 
     def process_literal_param(self, value, dialect):
-        return int(value)
+        return str(int(value))
 
 
 class SubtypesDateTime(types.TypeDecorator):
