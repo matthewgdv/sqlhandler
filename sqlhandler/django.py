@@ -24,6 +24,10 @@ class DjangoModelMixin:
     def __call__(self) -> DjangoModel:
         return self.sql.query.get(getattr(self, self._meta.pk.name))
 
+    @property
+    def sql(self):
+        return DjangoDatabase.django_mappings[self._meta.db_name].sql
+
 
 class NullOp:
     pass
@@ -47,7 +51,7 @@ class SqlHandlerConfig(AppConfig):
 
     def ready(self) -> None:
         self.settings.update(getattr(settings, "SQLHANDLER_SETTINGS", {}))
-        DjangoDatabase.model_mappings = {model._meta.db_table: model for models in apps.all_models.values() for model in models.values()}
+        DjangoDatabase.django_mappings = {model._meta.db_table: model for models in apps.all_models.values() for model in models.values()}
 
         for connection in db.connections.databases:
             connections[connection] = sql = DjangoSql(connection)
@@ -58,7 +62,7 @@ class SqlHandlerConfig(AppConfig):
         self.create_model_cls()
 
     def map_models(self, sql: DjangoSql) -> None:
-        for table, model in DjangoDatabase.model_mappings.items():
+        for table, model in DjangoDatabase.django_mappings.items():
             for schema in self.settings.SCHEMAS:
                 if table in sql.orm[schema]():
                     sql_model = sql.orm[schema][table]
@@ -80,6 +84,10 @@ class SqlModel(SqlHandlerConfig.Sql.constructors.Model, SqlHandlerConfig.setting
     def __call__(self) -> DjangoModelMixin:
         return self.django.objects.get(pk=getattr(self, list(self.__table__.primary_key)[0].name))
 
+    @property
+    def django(self):
+        return DjangoApps.sqlhandler_mappings[self.__table__.name].django
+
 
 class DjangoApp(SqlHandlerConfig.Sql.constructors.OrmSchema):
     pass
@@ -87,6 +95,7 @@ class DjangoApp(SqlHandlerConfig.Sql.constructors.OrmSchema):
 
 class DjangoApps(SqlHandlerConfig.Sql.constructors.OrmSchemas):
     schema_constructor = DjangoApp
+    sqlhandler_mappings = {}
 
     def __repr__(self) -> str:
         return f"""{type(self).__name__}(num_apps={len(self)}, apps=[{", ".join([f"{type(schema).__name__}(name='{schema._name}', tables={len(schema) if schema._ready else '?'})" for name, schema in self])}])"""
@@ -101,10 +110,11 @@ class DjangoApps(SqlHandlerConfig.Sql.constructors.OrmSchemas):
             schema._ready = True
             for name, model in models.items():
                 schema[name] = model.sql
+                self.sqlhandler_mappings[model._meta.db_table] = model.sql
 
 
 class DjangoDatabase(SqlHandlerConfig.Sql.constructors.Database):
-    model_mappings: dict = None
+    django_mappings: dict = None
 
     def __init__(self, sql: DjangoSql) -> None:
         self.django = DjangoApps(database=self)
@@ -119,11 +129,11 @@ class DjangoDatabase(SqlHandlerConfig.Sql.constructors.Database):
 
     @staticmethod
     def _scalar_name(base: Any, local_cls: Any, referred_cls: Any, constraint: Any) -> str:
-        return Maybe(DjangoDatabase.model_mappings)[referred_cls.__name__]._meta.model_name.else_(referred_cls.__name__)
+        return Maybe(DjangoDatabase.django_mappings)[referred_cls.__name__]._meta.model_name.else_(referred_cls.__name__)
 
     @staticmethod
     def _collection_name(base: Any, local_cls: Any, referred_cls: Any, constraint: Any) -> str:
-        real_name = Maybe(DjangoDatabase.model_mappings)[referred_cls.__name__]._meta.model_name.else_(referred_cls.__name__)
+        real_name = Maybe(DjangoDatabase.django_mappings)[referred_cls.__name__]._meta.model_name.else_(referred_cls.__name__)
         return Str(real_name).case.plural()
 
 
