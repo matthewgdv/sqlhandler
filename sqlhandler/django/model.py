@@ -1,14 +1,21 @@
 from __future__ import annotations
 
-from typing import Type
+from typing import Type, TYPE_CHECKING
 
 from .config import SqlConfig
+
+if TYPE_CHECKING:
+    from .sql import DjangoSql
 
 
 class SqlModel(SqlConfig.Sql.constructors.Model, SqlConfig.settings.MODEL_MIXIN):
     @classmethod
     def django(cls) -> Type[DjangoModel]:
         return SqlConfig.sql.database.django_mappings[cls.__table__.name]
+
+    @classmethod
+    def handler(cls) -> DjangoSql:
+        return SqlConfig.sql
 
     def __call__(self) -> DjangoModel:
         return type(self).django().objects.get(pk=getattr(self, list(self.__table__.primary_key)[0].name))

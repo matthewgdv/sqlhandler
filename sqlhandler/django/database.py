@@ -42,7 +42,7 @@ class DjangoApps(SqlConfig.Sql.constructors.OrmSchemas):
             self[app] = schema = self.schema_constructor(parent=self, name=app)
             schema._ready = True
             for name, model in models.items():
-                schema[name] = model = self._database.orm()._table_mappings[(table_name := model._meta.db_table)]
+                schema[name] = model = self._database.orm()._table_mappings.get(table_name := model._meta.db_table)
                 self._table_mappings[table_name] = model
 
 
