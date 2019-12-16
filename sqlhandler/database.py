@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Union, Set, TYPE_CHECKING
+from typing import Any, Union, Set, Callable, TYPE_CHECKING
 import copy
 
 import sqlalchemy as alch
@@ -103,7 +103,7 @@ class Database:
         model = declarative_base(bind=self.sql.engine, metadata=new_meta, cls=self.sql.constructors.Model, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.Model.__name__, class_registry={})
 
         automap = automap_base(declarative_base=model)
-        automap.prepare(classname_for_table=self._table_name, name_for_scalar_relationship=self._scalar_name, name_for_collection_relationship=self._collection_name)
+        automap.prepare(classname_for_table=self._table_name(), name_for_scalar_relationship=self._scalar_name(), name_for_collection_relationship=self._collection_name())
 
         self.orm[schema.name]._refresh(automap=automap, meta=new_meta)
         self.objects[schema.name]._refresh(automap=automap, meta=new_meta)
@@ -135,17 +135,23 @@ class Database:
         if self.sql.CACHE_METADATA:
             self.cache[self.name] = self.meta
 
-    @staticmethod
-    def _table_name(base: Any, tablename: Any, table: Any) -> str:
-        return tablename
+    def _table_name(self) -> Callable:
+        def table_name(base: Any, tablename: Any, table: Any) -> str:
+            return tablename
 
-    @staticmethod
-    def _scalar_name(base: Any, local_cls: Any, referred_cls: Any, constraint: Any) -> str:
-        return referred_cls.__name__
+        return table_name
 
-    @staticmethod
-    def _collection_name(base: Any, local_cls: Any, referred_cls: Any, constraint: Any) -> str:
-        return str(Str(referred_cls.__name__).case.snake().case.plural())
+    def _scalar_name(self) -> Callable:
+        def scalar_name(base: Any, local_cls: Any, referred_cls: Any, constraint: Any) -> str:
+            return referred_cls.__name__
+
+        return scalar_name
+
+    def _collection_name(self) -> Callable:
+        def collection_name(base: Any, local_cls: Any, referred_cls: Any, constraint: Any) -> str:
+            return str(Str(referred_cls.__name__).case.snake().case.plural())
+
+        return collection_name
 
 
 class Schemas(NameSpace):
@@ -153,7 +159,7 @@ class Schemas(NameSpace):
 
     def __init__(self, database: Database) -> None:
         super().__init__()
-        self._database = database
+        self._database, self._table_mappings = database, {}
         self._refresh()
 
     def __repr__(self) -> str:
@@ -168,7 +174,7 @@ class Schemas(NameSpace):
 
     def __getattr__(self, attr: str) -> Schema:
         if not attr.startswith("_"):
-            self._database.reflect(attr)
+            self._refresh()
 
         try:
             return super().__getattribute__(attr)
@@ -178,15 +184,15 @@ class Schemas(NameSpace):
     def _refresh(self) -> None:
         super().__call__()
         for schema in self._database.schemas:
-            self[schema.name] = self.schema_constructor(database=self._database, name=schema.name)
+            self[schema.name] = self.schema_constructor(parent=self, name=schema.name)
 
 
 class Schema(NameSpace):
     """A NameSpace class representing a database schema. Models/objects can be accessed with either attribute or item access. If the model/object isn't already cached, an attempt will be made to reflect it."""
 
-    def __init__(self, database: Database, name: str) -> None:
+    def __init__(self, parent: Schemas, name: str) -> None:
         super().__init__()
-        self._database, self._name, self._ready = database, name, False
+        self._database, self._parent, self._name, self._ready = parent._database, parent, name, False
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name={repr(self._name)}, num_tables={len(self) if self._ready else '?'}, tables={[table for table, _ in self] if self._ready else '?'})"
@@ -216,14 +222,14 @@ class OrmSchema(Schema):
     def _refresh(self, automap: Model, meta: Metadata) -> None:
         self._pre_refresh()
         for name, table in {table.__table__.name: table for table in automap.classes}.items():
-            self[name] = table
+            self[name] = self._parent._table_mappings[name] = table
 
 
 class ObjectSchema(Schema):
     def _refresh(self, automap: Model, meta: Metadata) -> None:
         self._pre_refresh()
         for name, table in {table.name: table for table in meta.tables.values()}.items():
-            self[name] = table
+            self[name] = self._parent._table_mappings[name] = table
 
 
 class OrmSchemas(Schemas):
