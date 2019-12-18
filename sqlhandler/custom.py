@@ -227,6 +227,12 @@ class Query(alch.orm.Query):
         """Simple alias for the '.delete()' method, with the default 'synchronize_session' argument set to 'fetch', rather than 'evaluate'. Check that method for documentation."""
         return super().delete(synchronize_session=synchronize_session)
 
+    def subquery(self, name: str = None, with_labels: bool = False, reduce_columns: bool = False):
+        sub = super().subquery(name=name, with_labels=with_labels, reduce_columns=reduce_columns)
+        for col in sub.c:
+            setattr(sub, col.name, col)
+        return sub
+
 
 class ForeignKey(alch.ForeignKey):
     def __init__(self, column: Any, *args: Any, **kwargs: Any) -> None:
