@@ -1,3 +1,5 @@
+django
+alembic
 maybe-else
 numpy
 pandas

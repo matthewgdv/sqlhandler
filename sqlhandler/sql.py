@@ -7,17 +7,15 @@ from typing import Any, Dict, TYPE_CHECKING
 
 import numpy as np
 import pandas as pd
-import pyodbc
 
 import sqlalchemy as alch
 from sqlalchemy.orm import backref, relationship
-
+from sqlalchemy.engine.default import DefaultDialect
 from sqlalchemy.dialects import mssql
-
 
 from subtypes import Frame, Enum
 from pathmagic import File
-from miscutils import lazy_property
+from miscutils import cached_property
 from iotools.misc.serializer import LostObject
 
 from .custom import ModelMeta, Model, AutoModel, Query, Session, ForeignKey, Relationship
@@ -29,9 +27,7 @@ from .database import Database, OrmSchemas, ObjectSchemas, OrmSchema, ObjectSche
 from .config import Config, Url
 
 if TYPE_CHECKING:
-    import alembic
-
-assert pyodbc
+    from alembic.operations import Operations
 
 
 class Sql:
@@ -116,10 +112,10 @@ class Sql:
         """Property controlling access to raw database objects. Schemas must be accessed before tables: E.g. Sql().orm.some_schema.some_table"""
         return self.database.objects
 
-    @lazy_property
-    def operations(self) -> alembic.operations.Operations:
+    @cached_property
+    def operations(self) -> Operations:
         """Property controlling access to alembic operations."""
-        from alembic.migration import MigrationContext
+        from alembic.runtime.migration import MigrationContext
         from alembic.operations import Operations
 
         return Operations(MigrationContext.configure(self.engine.connect()))
@@ -185,7 +181,7 @@ class Sql:
         if has_identity_pk:
             dtypes[primary_key] = alch.types.INT
 
-        dataframe.to_sql(engine=self.engine, name=table, if_exists=if_exists, index=False, index_label=None, primary_key=primary_key, schema=schema, dtype=dtypes)
+        dataframe.to_sql(engine=self.engine, name=table, if_exists=if_exists, index=False, primary_key=primary_key, schema=schema, dtype=dtypes)
 
         table_object = self.orm[schema][table]
         self.database.refresh_table(table=table_object)
@@ -213,7 +209,7 @@ class Sql:
     def _create_url(self, connection: str, database: str) -> Url:
         return self.config.generate_url(connection=connection, database=database)
 
-    def _customize_dialect(self, dialect: alch.engine.default.DefaultDialect) -> alch.engine.default.DefaultDialect:
+    def _customize_dialect(self, dialect: DefaultDialect) -> DefaultDialect:
         dialect.colspecs.update(
             {
                 alch.types.DateTime: SubtypesDateTime,

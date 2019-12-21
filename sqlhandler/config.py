@@ -44,7 +44,7 @@ class Config(iotools.Config):
         else:
             raise ValueError(f"Connection {connection} is not one of the currently registered connections: {', '.join(self.data.connections)}. Use {type(self).__name__}.add_connection() first.")
 
-    def generate_url(self, connection: str = None, database: str = None) -> str:
+    def generate_url(self, connection: str = None, database: str = None) -> Url:
         """Generate a sql connection URL from the current config with optional overrides passed as arguments."""
         if connection is None or connection in self.data.connections:
             settings = self.data.connections[Maybe(connection).else_(self.data.default_connection)]

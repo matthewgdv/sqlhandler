@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Union, Set, Callable, TYPE_CHECKING
+from typing import Any, Union, Set, Callable, TYPE_CHECKING, cast, Optional
 import copy
 
 import sqlalchemy as alch
-from sqlalchemy.ext.automap import automap_base
+from sqlalchemy.ext.automap import automap_base, AutomapBase
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.util import immutabledict
 
@@ -35,8 +35,8 @@ class Database:
 
         self.meta = self._get_metadata()
 
-        self.model: Model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.constructors.Model, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.Model.__name__, class_registry=self._registry)
-        self.auto_model: AutoModel = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.constructors.AutoModel, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.AutoModel.__name__, class_registry=self._registry)
+        self.model = cast(Model, declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.constructors.Model, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.Model.__name__, class_registry=self._registry))
+        self.auto_model = cast(AutoModel, declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.constructors.AutoModel, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.AutoModel.__name__, class_registry=self._registry))
 
         self.orm, self.objects = OrmSchemas(database=self), ObjectSchemas(database=self)
         for schema in {table.schema for table in self.meta.tables.values()}:
@@ -219,7 +219,7 @@ class Schema(NameSpace):
 
 
 class OrmSchema(Schema):
-    def _refresh(self, automap: Model, meta: Metadata) -> None:
+    def _refresh(self, automap: AutomapBase, meta: Metadata) -> None:
         self._pre_refresh()
         for name, table in {table.__table__.name: table for table in automap.classes}.items():
             self[name] = self._parent._table_mappings[name] = table
@@ -255,7 +255,7 @@ class Metadata(alch.MetaData):
 
 
 class SchemaName:
-    def __init__(self, name: str, default: str) -> None:
+    def __init__(self, name: Optional[str], default: str) -> None:
         if default is None:
             self.name, self.nullable_name = "main", None
         else:
