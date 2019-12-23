@@ -1,15 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, List, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, Optional
 
 import sqlalchemy as alch
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.ext.compiler import compiles
-import sqlparse
-import sqlparse.sql as sqltypes
 
 from maybe import Maybe
-from subtypes import Str, Frame, List_
+from subtypes import Frame
 from miscutils import is_non_string_iterable
 
 from .utils import literalstatement
@@ -21,6 +19,11 @@ if TYPE_CHECKING:
 
 class ExpressionMixin:
     """A mixin providing private methods for logging using expression classes."""
+    bind: Any
+    table: Any
+    select: Any
+    into: Any
+    _whereclause: Any
 
     @property
     def sql(self) -> Sql:
@@ -50,7 +53,7 @@ class ExpressionMixin:
                 self.sql.session.rollback()
                 self.sql.log.write("ROLLBACK;", add_newlines=2)
 
-    def _perform_pre_select(self, silently: bool) -> None:
+    def _perform_pre_select(self, silently: bool) -> Optional[Select]:
         if silently:
             return
         else:
@@ -66,10 +69,10 @@ class ExpressionMixin:
         if not silently:
             pre_select_object.resolve()
 
-    def _perform_pre_select_from_select(self, silently: bool) -> None:
+    def _perform_pre_select_from_select(self, silently: bool) -> int:
         return None if self.select is None else len((self.select.frame if silently else self.select.resolve)().index)
 
-    def _execute_expression_and_determine_rowcount(self, rowcount: int = None) -> None:
+    def _execute_expression_and_determine_rowcount(self, rowcount: int = None) -> int:
         result = self.sql.session.execute(self)
         self.sql.log.write(str(self), add_newlines=2)
 
@@ -91,7 +94,7 @@ class ExpressionMixin:
 
     def _perform_post_select_all(self, silently: bool) -> None:
         if not silently:
-            self.sql.Select(["*"]).select_from(self.sql.Text(f"{self.into}")).resolve()
+            self.sql.Select(["*"]).select_from(self.sql.text(f"{self.into}")).resolve()
 
 
 class Select(alch.sql.Select):
@@ -126,7 +129,7 @@ class Select(alch.sql.Select):
         """Simple alias for the 'select_from' method. See that method's docstring for documentation."""
         return self.select_from(*args, **kwargs)
 
-    def _select_to_frame(self) -> None:
+    def _select_to_frame(self) -> Frame:
         result = self.bind.sql.session.execute(self)
         cols = [col[0] for col in result.cursor.description]
         return Frame(result.fetchall(), columns=cols)
@@ -179,11 +182,6 @@ class Insert(ExpressionMixin, alch.sql.Insert):
         """Returns this query's statement as raw SQL with inline literal binds."""
         literal = literalstatement(self)
         return literal
-        # TODO: fix the alignment
-        if self.select is not None:
-            return literal
-        else:
-            return self._align_values_insert(literal)
 
     def values(self, *args: Any, **kwargs: Any) -> Insert:
         """Insert the given values as either a single dict, or a list of dicts."""
@@ -192,43 +190,6 @@ class Insert(ExpressionMixin, alch.sql.Insert):
             ret.parameters = [{(col.key if isinstance(col, InstrumentedAttribute) else col): (Maybe(val).else_(alch.null()))
                                for col, val in record.items()} for record in ret.parameters]
         return ret
-
-    @staticmethod
-    def _align_values_insert(literal: str) -> str:
-        def extract_parentheses(text: str) -> List[List[str]]:
-            def nested_list_of_vals_from_paren(paren: sqltypes.Parenthesis) -> List[List[str]]:
-                targets = [item for item in paren if not any([not item.value.strip(), item.value in (",", "(", ")")])]
-                values = [[item.value for item in target if not any([not item.value.strip(), item.value in (",", "(", ")")])] if isinstance(target, sqltypes.IdentifierList)
-                          else target.value
-                          for target in targets]
-
-                vals = List_(values).flatten()
-                return [vals]
-
-            parser = sqlparse.parse(text)[0]
-            func, = [item for item in parser if isinstance(item, sqltypes.Function)]
-            headerparen, = [item for item in func if isinstance(item, sqltypes.Parenthesis)]
-            headers = nested_list_of_vals_from_paren(headerparen)
-
-            parens = [item for item in parser if isinstance(item, sqltypes.Parenthesis)]
-            values: List[List[str]] = sum([nested_list_of_vals_from_paren(paren) for paren in parens], [])
-            return headers + values
-
-        start = Str(literal).slice.before_first(r"\(")
-        sublists = extract_parentheses(literal)
-        for sublist in sublists:
-            sublist[0] = f"({sublist[0]}"
-            sublist[-1] = f"{sublist[-1]})"
-
-        formatted_sublists = List_(sublists).align_nested(fieldsep=", ", linesep=",\n").split("\n")
-        formatted_sublists[0] = f"{start}{formatted_sublists[0][:-1]}"
-        formatted_sublists[1] = f"VALUES{' ' * (len(start) - 6)}{formatted_sublists[1]}"
-
-        if len(formatted_sublists) > 2:
-            for index, sublist in enumerate(formatted_sublists[2:]):
-                formatted_sublists[index + 2] = f"{' ' * (len(start))}{sublist}"
-        final = '\n'.join(formatted_sublists) + ";"
-        return final
 
 
 class Delete(ExpressionMixin, alch.sql.Delete):

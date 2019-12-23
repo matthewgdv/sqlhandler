@@ -1,4 +1,4 @@
-import pytest
+# import pytest
 
 
 def test_SqlLog___enter__():

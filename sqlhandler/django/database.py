@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Callable, TYPE_CHECKING
+from typing import Any, Callable, TYPE_CHECKING, Iterator, Tuple
 
 from django.apps import apps
 
@@ -27,13 +27,16 @@ class DjangoApps(SqlConfig.Sql.constructors.OrmSchemas):
     def __repr__(self) -> str:
         return f"""{type(self).__name__}(num_apps={len(self)}, apps=[{", ".join([f"{type(schema).__name__}(name='{schema._name}', tables={len(schema) if schema._ready else '?'})" for name, schema in self])}])"""
 
+    def __iter__(self) -> Iterator[Tuple[str, Any]]:
+        return super().__iter__()
+
     def _refresh(self) -> None:
         pass
 
     def _hierarchize(self) -> None:
         NameSpace.__call__(self)
 
-        valid_schemas = {self._database.default_schema if schema is None else name for schema in SqlConfig.settings.SCHEMAS}
+        valid_schemas = {self._database.default_schema if schema is None else schema for schema in SqlConfig.settings.SCHEMAS}
         for name, schema in self._database.orm:
             if name in valid_schemas:
                 schema()

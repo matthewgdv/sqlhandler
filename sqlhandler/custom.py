@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Union, Dict
+from typing import Any, Union, Dict, Callable, Optional, TYPE_CHECKING
 
 import pandas as pd
 
@@ -14,9 +14,11 @@ from sqlalchemy.schema import CreateTable
 from sqlalchemy.sql.base import ImmutableColumnCollection
 from sqlalchemy.sql.schema import _get_table_key
 
-from sqlalchemy.orm.util import AliasedClass
-from sqlalchemy.orm.attributes import InstrumentedAttribute
+
 from sqlalchemy.orm import backref, relationship
+from sqlalchemy.orm.attributes import InstrumentedAttribute
+from sqlalchemy.orm.util import AliasedClass
+from sqlalchemy.orm.mapper import Mapper
 
 from sqlalchemy.ext.declarative import declared_attr, DeclarativeMeta
 
@@ -26,6 +28,8 @@ from subtypes import Str, Dict_, Enum
 from .utils import literalstatement
 from .override import SubtypesDateTime
 
+if TYPE_CHECKING:
+    from .database import Metadata
 
 # TODO: Find way to implement ONE_TO_MANY relationship by extending the previous model with a foreign key after the fact
 
@@ -58,8 +62,9 @@ class CreateTableAccessor:
 class ModelMeta(DeclarativeMeta):
     __table__ = None
     __table_cls__ = Table
+    metadata: Metadata
 
-    def __new__(mcs, name: str, bases: tuple, namespace: dict) -> Model:
+    def __new__(mcs, name: str, bases: tuple, namespace: dict) -> ModelMeta:
         abs_ns = absolute_namespace(bases=bases, namespace=namespace)
 
         relationships = {key: val for key, val in abs_ns.items() if isinstance(val, Relationship)}
@@ -80,31 +85,34 @@ class ModelMeta(DeclarativeMeta):
         return cls.__name__ if cls.__table__ is None else f"{cls.__name__}({', '.join([f'{col.key}={type(col.type).__name__}' for col in cls.__table__.columns])})"
 
     @property
-    def query(cls: Model) -> Query:
+    def query(cls: ModelMeta) -> Query:
         """Create a new Query operating on this class."""
         return cls.metadata.bind.sql.session.query(cls)
 
     @property
-    def create(cls: Model) -> None:
+    def create(cls: ModelMeta) -> CreateTableAccessor:
         """Create the table mapped to this class."""
         return CreateTableAccessor(cls)
 
     @property
-    def c(cls: Model) -> ImmutableColumnCollection:
+    def c(cls: ModelMeta) -> ImmutableColumnCollection:
         """Access the columns (or a specific column if 'colname' is specified) of the underlying table."""
         return cls.__table__.c
 
-    def alias(cls: Model, name: str, **kwargs: Any) -> AliasedClass:
+    def alias(cls: ModelMeta, name: str, **kwargs: Any) -> AliasedClass:
         """Create a new class that is an alias of this one, with the given name."""
         return alch.orm.aliased(cls, name=name, **kwargs)
 
-    def drop(cls: Model) -> None:
+    def drop(cls: ModelMeta) -> None:
         """Drop the table mapped to this class."""
         cls.metadata.sql.database.drop_table(cls)
 
 
 class Model:
     """Custom base class for declarative and automap bases to inherit from. Represents a mapped table in a sql database."""
+    __table__: Table
+    metadata: Metadata
+    __mapper__: Mapper
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({', '.join([f'{col.name}={repr(getattr(self, col.name))}' for col in type(self).__table__.columns])})"
@@ -266,8 +274,8 @@ class Relationship:
             return Relationship(target=target, kind=Relationship.Kind.MANY_TO_MANY, backref_name=backref_name, association=association, **backref_kwargs)
 
     class _TargetEntity:
-        def __init__(self, model: Model, relationship: Relationship) -> None:
-            self.relationship, self.model, self.name = relationship, model, model.__table__.name
+        def __init__(self, model: Model, rel: Relationship) -> None:
+            self.relationship, self.model, self.name = rel, model, model.__table__.name
             self.pk, = list(self.model.__table__.primary_key)
             self.fk = self.relationship._casing(f"{self.name}_{Relationship.FK_SUFFIX}")
 
@@ -275,8 +283,8 @@ class Relationship:
             return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
 
     class _FutureEntity:
-        def __init__(self, table_name: str, bases: tuple, namespace: dict, relationship: Relationship) -> None:
-            self.relationship, self.name, self.bases, self.namespace = relationship, table_name, bases, namespace
+        def __init__(self, table_name: str, bases: tuple, namespace: dict, rel: Relationship) -> None:
+            self.relationship, self.name, self.bases, self.namespace = rel, table_name, bases, namespace
             self.plural = str(Str(self.name).case.plural())
 
             pk_key, = [key for key, val in absolute_namespace(bases=bases, namespace=namespace).items() if isinstance(val, Column) and val.primary_key]
@@ -286,14 +294,17 @@ class Relationship:
             return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
 
     def __init__(self, target: Model, kind: Relationship.Kind, backref_name: str = None, association: str = None, **backref_kwargs: Any) -> None:
-        self.target, self.kind, self.backref_name, self.association = Relationship._TargetEntity(model=target, relationship=self), kind, backref_name, association
+        self.target, self.kind, self.backref_name, self.association = Relationship._TargetEntity(model=target, rel=self), kind, backref_name, association
         self.backref_kwargs = Dict_({**self.DEFAULT_BACKREF_KWARGS, **backref_kwargs})
+
+        self.this: Optional[Relationship._FutureEntity] = None
+        self.attribute: Optional[str] = None
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
 
     def build(self, table_name: str, bases: tuple, namespace: dict, attribute: str) -> None:
-        self.this, self.attribute = Relationship._FutureEntity(table_name=table_name, bases=bases, namespace=namespace, relationship=self), attribute
+        self.this, self.attribute = Relationship._FutureEntity(table_name=table_name, bases=bases, namespace=namespace, rel=self), attribute
         self._build_fk_columns()
         self._build_relationship()
 
@@ -315,6 +326,7 @@ class Relationship:
                 backref_name = self.this.plural
             else:
                 Relationship.Kind.raise_if_not_a_member(self.kind)
+                backref_name = None
 
         if self.kind == Relationship.Kind.ONE_TO_ONE:
             self.backref_kwargs.uselist = False
@@ -323,7 +335,8 @@ class Relationship:
 
         self.this.namespace[self.attribute] = relationship(self.target.model, secondary=secondary, backref=backref(name=backref_name, **self.backref_kwargs))
 
-    def _build_association_table(self) -> Table:
+    # noinspection PyArgumentList
+    def _build_association_table(self) -> Callable[[], Table]:
         if self.association is not None:
             table = self.association
         else:
@@ -346,11 +359,11 @@ class Relationship:
 
 
 def absolute_namespace(bases: tuple, namespace: dict) -> dict:
-    absolute_namespace = {}
+    abs_ns = {}
     for immediate_base in reversed(bases):
         for hierarchical_base in reversed(immediate_base.mro()):
-            absolute_namespace.update(vars(hierarchical_base))
+            abs_ns.update(vars(hierarchical_base))
 
-    absolute_namespace.update(namespace)
+    abs_ns.update(namespace)
 
-    return absolute_namespace
+    return abs_ns

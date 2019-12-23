@@ -11,6 +11,7 @@ Provides a thick wrapper around some SQLAlchemy operations with lots of convenie
 
 The `Sql` class
 --------------------
+
 * Central handler class
 * Automatically start connections based on prior configuration
 * Preconfigured SQLAlchemy `Session` subclass bound which produces special `Query` objects with its `Session.query()` method.
@@ -23,12 +24,14 @@ The `Sql` class
 
 The `Config` class
 --------------------
+
 * Simple API for configuring database URLs that can be easily reused
 * When Providing a default host and database, `Sql` will no longer require arguments when connecting
 * Add or remove config programatically as well as by importing/exporting JSON files
 
 The `Model` class
 --------------------
+
 * A SQLAlchemy declarative base with a few utility methods
 * `Model.insert()`, `Model.update()`, and `Model.delete()` will perform the respective operations within their bound session
 * `Model.frame()` converts a record to a `subtypes.Frame` with a single row
@@ -37,6 +40,7 @@ The `Model` class
 
 The `Query` class
 --------------------
+
 * Alias methods `Query.from_()` (`Query.select_from()`), `Query.where()` (`Query.filter()`), `Query.set_()` (`Query.update()`, with automatic 'fetch' behaviour)
 * `Query.frame()` method for conversion to `subtypes.Frame`
 * `Query.scalar_col()` method for conversion of a single column to a `list`
@@ -44,6 +48,7 @@ The `Query` class
 
 The `Database` class
 --------------------
+
 * `Database.orm` and `Database.objects` attributes can be used to access database objects via attribute access (eg `Database.orm.log.main`)
 * `Database.orm` yields mapped classes, but only for database objects with a primary key
 * `Database.objects` yields raw table objects, and should allow access to any database object, even those without a primary key, views, etc.
@@ -52,6 +57,7 @@ The `Database` class
 
 Custom expression classes
 --------------------
+
 * `Select`, `Update`, `Insert`, and `Delete` subclasses with various extra methods
 * `.resolve()` method facilitates performing queries with user interaction
 
@@ -62,7 +68,7 @@ Installation
 
 To install use pip:
 
-    $ pip install [project_name]
+    $ pip install sqlhandler
 
 
 Or clone the repo:
@@ -74,7 +80,7 @@ Or clone the repo:
 Usage
 ====================
 
-[Usage]
+Usage coming soon!
 
 Contributing
 ====================

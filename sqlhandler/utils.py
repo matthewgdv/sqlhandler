@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, List, Callable, TypeVar, TYPE_CHECKING
+from typing import Any, List, Callable, TypeVar, TYPE_CHECKING, Dict, Tuple, Optional
 from abc import ABC, abstractmethod
 
 import sqlalchemy as alch
-import sqlalchemy.sql.sqltypes
 from sqlalchemy.orm import Query
 import sqlparse
 
@@ -43,7 +42,7 @@ class Executable(SqlBoundMixin, ABC):
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self.execute(*args, **kwargs)
 
-    def execute(self, *args: Any, **kwargs: Any) -> List[Frame]:
+    def execute(self, *args: Any, **kwargs: Any) -> Optional[List[Frame]]:
         """Execute this executable SQL object. Passes on its args and kwargs to Executable._compile_sql()."""
         statement, bindparams = self._compile_sql(*args, **kwargs)
         cursor = self.sql.session.execute(statement, bindparams).cursor
@@ -54,14 +53,14 @@ class Executable(SqlBoundMixin, ABC):
             return self.results[-1]
 
     @abstractmethod
-    def _compile_sql(self, *args: Any, **kwargs: Any) -> None:
+    def _compile_sql(self, *args: Any, **kwargs: Any) -> Tuple[str, Dict[str, Any]]:
         pass
 
     @staticmethod
     def _get_frames_from_cursor(cursor: Any) -> List[Frame]:
-        def get_frame_from_cursor(cursor: Any) -> Frame:
+        def get_frame_from_cursor(curs: Any) -> Optional[Frame]:
             try:
-                return Frame([tuple(row) for row in cursor.fetchall()], columns=[info[0] for info in cursor.description])
+                return Frame([tuple(row) for row in curs.fetchall()], columns=[info[0] for info in cursor.description])
             except Exception:
                 return None
 
@@ -82,13 +81,13 @@ class StoredProcedure(Executable):
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name={self.name}, schema={self.schema})"
 
-    def _compile_sql(self, *args: Any, **kwargs: Any) -> Frame:
+    def _compile_sql(self, *args: Any, **kwargs: Any) -> Tuple[str, Dict[str, Any]]:
         mappings = {
             **{f"boundarg{index + 1}": {"bind": f":boundarg{index + 1}", "val": val} for index, val in enumerate(args)},
             **{f"boundkwarg{index + 1}": {"bind": f"@{name}=:boundkwarg{index + 1}", "val": val} for index, (name, val) in enumerate(kwargs.items())}
         }
         proc_name = f"EXEC {f'[{self.database}].' if self.database is not None else ''}[{self.schema}].[{self.name}]"
-        return (f"{proc_name} {', '.join([arg['bind'] for arg in mappings.values()])}", {name: arg["val"] for name, arg in mappings.items()})
+        return f"{proc_name} {', '.join([arg['bind'] for arg in mappings.values()])}", {name: arg["val"] for name, arg in mappings.items()}
 
 
 class Script(Executable):
@@ -101,8 +100,8 @@ class Script(Executable):
     def __repr__(self) -> str:
         return f"{type(self).__name__}(file={self.file})"
 
-    def _compile_sql(self, *args: Any, **kwargs: Any) -> Frame:
-        return (self.file.content, {})
+    def _compile_sql(self, *args: Any, **kwargs: Any) -> Tuple[str, Dict[str, Any]]:
+        return self.file.content, {}
 
 
 class TempManager:

@@ -2,6 +2,9 @@ from __future__ import annotations
 
 from typing import Type, TYPE_CHECKING
 
+from django.db.models.manager import Manager
+from django.db.models.options import Options
+
 from .config import SqlConfig
 
 if TYPE_CHECKING:
@@ -22,6 +25,9 @@ class SqlModel(SqlConfig.Sql.constructors.Model, SqlConfig.settings.MODEL_MIXIN)
 
 
 class DjangoModel:
+    objects: Manager
+    _meta: Options
+
     @classmethod
     def sql(cls) -> Type[SqlModel]:
         return SqlConfig.sql.database.sqlhandler_mappings[cls._meta.db_table]
