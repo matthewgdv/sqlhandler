@@ -158,14 +158,13 @@ class Schemas(NameSpace):
     """A NameSpace class representing a set of database schemas. Individual schemas can be accessed with either attribute or item access. If a schema isn't already cached an attempt will be made to reflect it."""
 
     def __init__(self, database: Database) -> None:
-        super().__init__()
         self._database, self._table_mappings = database, {}
         self._refresh()
 
     def __repr__(self) -> str:
         return f"""{type(self).__name__}(num_schemas={len(self)}, schemas=[{", ".join([f"{type(schema).__name__}(name='{schema._name}', tables={len(schema) if schema._ready else '?'})" for name, schema in self])}])"""
 
-    def __call__(self) -> Schema:
+    def __call__(self, mapping: dict = None, / , **kwargs: Any) -> Schema:
         self._refresh()
         return self
 
@@ -191,13 +190,12 @@ class Schema(NameSpace):
     """A NameSpace class representing a database schema. Models/objects can be accessed with either attribute or item access. If the model/object isn't already cached, an attempt will be made to reflect it."""
 
     def __init__(self, parent: Schemas, name: str) -> None:
-        super().__init__()
         self._database, self._parent, self._name, self._ready = parent._database, parent, name, False
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name={repr(self._name)}, num_tables={len(self) if self._ready else '?'}, tables={[table for table, _ in self] if self._ready else '?'})"
 
-    def __call__(self) -> Schema:
+    def __call__(self, mapping: dict = None, / , **kwargs: Any) -> Schema:
         self._database.reflect(self._name)
         return self
 
