@@ -1,77 +1,144 @@
 # import pytest
 
 
-def test_Base___repr__():
-    assert True
+class TestTable:
+    def test___new__():  # synced
+        assert True
 
 
-def test_Base_delete():
-    assert True
+class TestCreateTableAccessor:
+    def test___call__(self):  # synced
+        assert True
 
 
-def test_Base_frame():
-    assert True
+class TestModelMeta:
+    def test___new__():  # synced
+        assert True
+
+    def test_query():  # synced
+        assert True
+
+    def test_create():  # synced
+        assert True
+
+    def test_c():  # synced
+        assert True
+
+    def test_alias():  # synced
+        assert True
+
+    def test_drop():  # synced
+        assert True
 
 
-def test_Base_insert():
-    assert True
+class TestModel:
+    def test_insert(self):  # synced
+        assert True
+
+    def test_update(self):  # synced
+        assert True
+
+    def test_delete(self):  # synced
+        assert True
+
+    def test_clone(self):  # synced
+        assert True
 
 
-def test_Base_update():
-    assert True
+class TestAutoModel:
+    def test___tablename__():  # synced
+        assert True
+
+    def test_created():  # synced
+        assert True
+
+    def test_modified():  # synced
+        assert True
+
+    def test_active():  # synced
+        assert True
 
 
-def test_BitLiteral_literal_processor():
-    assert True
+class TestSession:
+    def test_query(self):  # synced
+        assert True
+
+    def test_execute(self):  # synced
+        assert True
 
 
-def test_Query___init__():
-    assert True
+class TestQuery:
+    def test___str__(self):  # synced
+        assert True
+
+    def test_frame(self):  # synced
+        assert True
+
+    def test_vector(self):  # synced
+        assert True
+
+    def test_literal(self):  # synced
+        assert True
+
+    def test_from_(self):  # synced
+        assert True
+
+    def test_where(self):  # synced
+        assert True
+
+    def test_update(self):  # synced
+        assert True
+
+    def test_delete(self):  # synced
+        assert True
+
+    def test_subquery(self):  # synced
+        assert True
 
 
-def test_Query___repr__():
-    assert True
+class TestForeignKey:
+    pass
 
 
-def test_Query___str__():
-    assert True
+class TestRelationship:
+    class TestKind:
+        pass
+
+    class TestOne:
+        def test_to_one():  # synced
+            assert True
+
+    class TestMany:
+        def test_to_one():  # synced
+            assert True
+
+        def test_to_many():  # synced
+            assert True
+
+    class Test_TargetEntity:
+        pass
+
+    class Test_FutureEntity:
+        pass
+
+    def test_build(self):  # synced
+        assert True
+
+    def test__build_fk_columns(self):  # synced
+        assert True
+
+    def test__build_relationship(self):  # synced
+        assert True
+
+    def test__build_association_table(self):  # synced
+        assert True
+
+    def test__defer_create_table():  # synced
+        assert True
+
+    def test__casing(self):  # synced
+        assert True
 
 
-def test_Query_frame():
-    assert True
-
-
-def test_Query_from_():
-    assert True
-
-
-def test_Query_literal():
-    assert True
-
-
-def test_Query_scalar_col():
-    assert True
-
-
-def test_Query_set_():
-    assert True
-
-
-def test_Query_where():
-    assert True
-
-
-def test_Session___init__():
-    assert True
-
-
-def test_Session_execute():
-    assert True
-
-
-def test_Session_query():
-    assert True
-
-
-def test_StringLiteral_literal_processor():
+def test_absolute_namespace():  # synced
     assert True

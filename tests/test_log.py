@@ -1,17 +1,12 @@
 # import pytest
 
 
-def test_SqlLog___enter__():
-    assert True
+class TestSqlLog:
+    def test_deactivate(self):  # synced
+        assert True
 
+    def test_write_comment(self):  # synced
+        assert True
 
-def test_SqlLog___exit__():
-    assert True
-
-
-def test_SqlLog_deactivate():
-    assert True
-
-
-def test_SqlLog_write_comment():
-    assert True
+    def test_from_details():  # synced
+        assert True
