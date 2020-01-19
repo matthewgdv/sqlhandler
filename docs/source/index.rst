@@ -1,5 +1,5 @@
 Welcome to sqlhandler's documentation!
-=================================
+======================================
 
 .. toctree::
    :caption: Contents:
