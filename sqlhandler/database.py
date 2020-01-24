@@ -48,8 +48,13 @@ class Database:
     def schema_names(self) -> Set[SchemaName]:
         return {SchemaName(name=name, default=self.default_schema) for name in alch.inspect(self.sql.engine).get_schema_names()}
 
-    def table_names(self) -> Set[str]:
-        return set(sum([alch.inspect(self.sql.engine).get_table_names(schema=schema.nullable_name) for schema in self.schemas], []))
+    def table_names(self) -> Set[TableName]:
+        names = set()
+        for schema in self.schemas:
+            for name in alch.inspect(self.sql.engine).get_table_names(schema=schema.nullable_name):
+                names.add(TableName(stem=name, schema=schema))
+
+        return names
 
     def reflect(self, schema: str = None) -> None:
         """Reflect the schema with the given name and refresh the 'Database.orm' and 'Database.objects' namespaces."""
@@ -122,8 +127,10 @@ class Database:
 
         meta.bind, meta.sql = self.sql.engine, self.sql
 
-        existing_tables = self.table_names()
+        existing_tables = {name.name for name in self.table_names()}
+        print(f"Search set is {existing_tables}")
         for table in [table for name, table in meta.tables.items() if name not in existing_tables and "information_schema" not in table.schema.lower()]:
+            print(f"Removing {table} because it was not found in the search set!")
             meta.remove(table)
 
         return meta
@@ -250,6 +257,15 @@ class Metadata(alch.MetaData):
         shallow = copy.copy(self)
         shallow.sql, shallow.tables = self.sql, immutabledict({name: table for name, table in self.tables.items() if (schema or "") == (table.schema or "")})
         return shallow
+
+
+class TableName:
+    def __init__(self, stem: str, schema: SchemaName) -> None:
+        self.stem, self.schema, self.full_name = stem, schema, f"{schema.name}.{stem}"
+        self.name = stem if schema.nullable_name is None else self.full_name
+
+    def __repr__(self) -> str:
+        return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
 
 
 class SchemaName:
