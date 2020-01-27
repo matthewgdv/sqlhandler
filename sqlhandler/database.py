@@ -128,9 +128,7 @@ class Database:
         meta.bind, meta.sql = self.sql.engine, self.sql
 
         existing_tables = {name.name for name in self.table_names()}
-        print(f"Search set is {existing_tables}")
         for table in [table for name, table in meta.tables.items() if name not in existing_tables and "information_schema" not in table.schema.lower()]:
-            print(f"Removing {table} because it was not found in the search set!")
             meta.remove(table)
 
         return meta
