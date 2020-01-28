@@ -6,7 +6,7 @@ import pandas as pd
 
 import sqlalchemy as alch
 
-from sqlalchemy import Table as SuperTable, Column, true, null, func
+from sqlalchemy import Column, true, null, func
 from sqlalchemy import types
 
 from sqlalchemy.schema import CreateTable
@@ -34,7 +34,7 @@ if TYPE_CHECKING:
 # TODO: Find way to implement ONE_TO_MANY relationship by extending the previous model with a foreign key after the fact
 
 
-class Table(SuperTable):
+class Table(alch.Table):
     def __new__(*args, **kwargs) -> Table:
         _, name, meta, *_ = args
         if (schema := kwargs.get("schema")) is None:
@@ -43,7 +43,7 @@ class Table(SuperTable):
         if (key := _get_table_key(name, schema)) in meta.tables:
             meta.remove(meta.tables[key])
 
-        return SuperTable.__new__(*args, **kwargs)
+        return alch.Table.__new__(*args, **kwargs)
 
 
 class CreateTableAccessor:
