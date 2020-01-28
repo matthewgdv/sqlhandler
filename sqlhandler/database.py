@@ -48,10 +48,11 @@ class Database:
     def schema_names(self) -> Set[SchemaName]:
         return {SchemaName(name=name, default=self.default_schema) for name in alch.inspect(self.sql.engine).get_schema_names()}
 
-    def table_names(self) -> Set[TableName]:
+    def object_names(self) -> Set[TableName]:
         names = set()
         for schema in self.schemas:
-            for name in alch.inspect(self.sql.engine).get_table_names(schema=schema.nullable_name):
+            inspector = alch.inspect(self.sql.engine)
+            for name in [*inspector.get_table_names(schema=schema.nullable_name), *inspector.get_view_names(schema=schema.nullable_name)]:
                 names.add(TableName(stem=name, schema=schema))
 
         return names
@@ -127,8 +128,8 @@ class Database:
 
         meta.bind, meta.sql = self.sql.engine, self.sql
 
-        existing_tables = {name.name for name in self.table_names()}
-        for table in [table for name, table in meta.tables.items() if name not in existing_tables and "information_schema" not in table.schema.lower()]:
+        existing_objects = {name.name for name in self.object_names()}
+        for table in [table for name, table in meta.tables.items() if name not in existing_objects and "information_schema" not in table.schema.lower()]:
             meta.remove(table)
 
         return meta

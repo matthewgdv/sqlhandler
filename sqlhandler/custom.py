@@ -37,12 +37,10 @@ if TYPE_CHECKING:
 class Table(SuperTable):
     def __new__(*args, **kwargs) -> Table:
         _, name, meta, *_ = args
-        schema = kwargs.get("schema", None)
-        if schema is None:
+        if (schema := kwargs.get("schema")) is None:
             schema = meta.schema
 
-        key = _get_table_key(name, schema)
-        if key in meta.tables:
+        if (key := _get_table_key(name, schema)) in meta.tables:
             meta.remove(meta.tables[key])
 
         return SuperTable.__new__(*args, **kwargs)
