@@ -6,10 +6,11 @@ from django import db
 
 from subtypes import Dict_
 
-from ..config import Url
 from .config import SqlConfig
 from .database import DjangoDatabase, DjangoApps
 from .model import SqlModel
+
+from sqlhandler.utils import Url
 
 
 class DjangoSql(SqlConfig.Sql):

@@ -18,13 +18,10 @@ from pathmagic import File
 from miscutils import cached_property
 from iotools.misc.serializer import LostObject
 
-from .custom import ModelMeta, Model, AutoModel, Query, Session, ForeignKey, Relationship
-from .override import SubtypesDateTime, SubtypesDate, BitLiteral
-from .expression import Select, Update, Insert, Delete, SelectInto
-from .utils import StoredProcedure, Script
-from .log import SqlLog
-from .database import Database, OrmSchemas, ObjectSchemas, OrmSchema, ObjectSchema, Metadata
-from .config import Config, Url
+from sqlhandler.custom import ModelMeta, Model, AutoModel, Query, Session, ForeignKey, Relationship, SubtypesDateTime, SubtypesDate, BitLiteral, Select, Update, Insert, Delete, SelectInto
+from sqlhandler.utils import StoredProcedure, Script, SqlLog
+from sqlhandler.database import Database, OrmSchemas, ObjectSchemas, OrmSchema, ObjectSchema, Metadata
+from sqlhandler.utils import Config, Url
 
 if TYPE_CHECKING:
     from alembic.operations import Operations

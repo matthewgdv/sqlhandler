@@ -8,7 +8,7 @@ from django.conf import settings
 
 from subtypes import Dict_
 
-from ..sql import Sql
+from sqlhandler.sql import Sql
 
 
 if TYPE_CHECKING:

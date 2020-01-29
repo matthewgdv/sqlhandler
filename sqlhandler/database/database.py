@@ -1,26 +1,24 @@
 from __future__ import annotations
 
-from typing import Any, Union, Set, Callable, TYPE_CHECKING, cast, Optional
-import copy
+from typing import Any, Union, Set, Callable, TYPE_CHECKING, cast
 
 import sqlalchemy as alch
-from sqlalchemy.ext.automap import automap_base, AutomapBase
+from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.util import immutabledict
 
 from maybe import Maybe
-from subtypes import Str, NameSpace
+from subtypes import Str
 from iotools import Cache
 
-from .custom import Model, AutoModel
+from .meta import NullRegistry, Metadata
+from .name import SchemaName, TableName
+from .schema import OrmSchemas, ObjectSchemas
+
+from sqlhandler.custom import Model, AutoModel
 
 if TYPE_CHECKING:
-    from .sql import Sql
-
-
-class NullRegistry(dict):
-    def __setitem__(self, key: Any, val: Any) -> None:
-        pass
+    from sqlhandler import Sql
 
 
 class Database:
@@ -160,122 +158,3 @@ class Database:
         return collection_name
 
 
-class Schemas(NameSpace):
-    """A NameSpace class representing a set of database schemas. Individual schemas can be accessed with either attribute or item access. If a schema isn't already cached an attempt will be made to reflect it."""
-
-    def __init__(self, database: Database) -> None:
-        self._database, self._table_mappings = database, {}
-        self._refresh()
-
-    def __repr__(self) -> str:
-        return f"""{type(self).__name__}(num_schemas={len(self)}, schemas=[{", ".join([f"{type(schema).__name__}(name='{schema._name}', tables={len(schema) if schema._ready else '?'})" for name, schema in self])}])"""
-
-    def __call__(self, mapping: dict = None, / , **kwargs: Any) -> Schema:
-        self._refresh()
-        return self
-
-    def __getitem__(self, name: str) -> Schema:
-        return getattr(self, SchemaName(name=name, default=self._database.default_schema).name) if name is None else super().__getitem__(name)
-
-    def __getattr__(self, attr: str) -> Schema:
-        if not attr.startswith("_"):
-            self._refresh()
-
-        try:
-            return super().__getattribute__(attr)
-        except AttributeError:
-            raise AttributeError(f"{type(self._database).__name__} '{self._database.name}' has no schema '{attr}'.")
-
-    def _refresh(self) -> None:
-        super().__call__()
-        for schema in self._database.schemas:
-            self[schema.name] = self.schema_constructor(parent=self, name=schema.name)
-
-
-class Schema(NameSpace):
-    """A NameSpace class representing a database schema. Models/objects can be accessed with either attribute or item access. If the model/object isn't already cached, an attempt will be made to reflect it."""
-
-    def __init__(self, parent: Schemas, name: str) -> None:
-        self._database, self._parent, self._name, self._ready = parent._database, parent, name, False
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(name={repr(self._name)}, num_tables={len(self) if self._ready else '?'}, tables={[table for table, _ in self] if self._ready else '?'})"
-
-    def __call__(self, mapping: dict = None, / , **kwargs: Any) -> Schema:
-        self._database.reflect(self._name)
-        return self
-
-    def __getattr__(self, attr: str) -> Model:
-        if not attr.startswith("_"):
-            self._database.reflect(self._name)
-
-        try:
-            return super().__getattribute__(attr)
-        except AttributeError:
-            raise AttributeError(f"{type(self).__name__} '{self._name}' of {type(self._database).__name__} '{self._database.name}' has no object '{attr}'.")
-
-    def _refresh(self, automap: Model, meta: Metadata) -> None:
-        raise NotImplementedError
-
-    def _pre_refresh(self) -> None:
-        super().__call__()
-        self._ready = True
-
-
-class OrmSchema(Schema):
-    def _refresh(self, automap: AutomapBase, meta: Metadata) -> None:
-        self._pre_refresh()
-        for name, table in {table.__table__.name: table for table in automap.classes}.items():
-            self[name] = self._parent._table_mappings[name] = table
-
-
-class ObjectSchema(Schema):
-    def _refresh(self, automap: Model, meta: Metadata) -> None:
-        self._pre_refresh()
-        for name, table in {table.name: table for table in meta.tables.values()}.items():
-            self[name] = self._parent._table_mappings[name] = table
-
-
-class OrmSchemas(Schemas):
-    schema_constructor = OrmSchema
-
-
-class ObjectSchemas(Schemas):
-    schema_constructor = ObjectSchema
-
-
-class Metadata(alch.MetaData):
-    def __init__(self, sql: Sql = None) -> None:
-        super().__init__()
-        self.sql = sql
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}(tables={len(self.tables)})"
-
-    def copy_schema_subset(self, schema: str) -> Metadata:
-        shallow = copy.copy(self)
-        shallow.sql, shallow.tables = self.sql, immutabledict({name: table for name, table in self.tables.items() if (schema or "") == (table.schema or "")})
-        return shallow
-
-
-class TableName:
-    def __init__(self, stem: str, schema: SchemaName) -> None:
-        self.stem, self.schema, self.full_name = stem, schema, f"{schema.name}.{stem}"
-        self.name = stem if schema.nullable_name is None else self.full_name
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
-
-
-class SchemaName:
-    def __init__(self, name: Optional[str], default: str) -> None:
-        if default is None:
-            self.name, self.nullable_name = "main", None
-        else:
-            if name is None:
-                self.name, self.nullable_name = default, None
-            else:
-                self.name, self.nullable_name = name, None if name == default else name
-
-    def __repr__(self) -> str:
-        return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"

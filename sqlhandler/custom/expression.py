@@ -10,11 +10,11 @@ from maybe import Maybe
 from subtypes import Frame
 from miscutils import is_non_string_iterable
 
-from .utils import literalstatement
+from sqlhandler.utils.utils import literal_statement
 
 
 if TYPE_CHECKING:
-    from .sql import Sql
+    from sqlhandler import Sql
 
 
 class ExpressionMixin:
@@ -108,7 +108,7 @@ class Select(alch.sql.Select):
         return f"{type(self).__name__}(\n{(str(self))}\n)"
 
     def __str__(self) -> str:
-        return self.literal()
+        return literal_statement(self)
 
     def frame(self) -> Frame:
         """Execute the query and return the result as a subtypes.Frame."""
@@ -120,10 +120,6 @@ class Select(alch.sql.Select):
         self.bind.sql.log.write(str(self), add_newlines=2)
         self.bind.sql.log.write_comment(frame.applymap(lambda val: 1 if val is True else (0 if val is False else ("NULL" if val is None else val))).to_ascii(), add_newlines=2)
         return frame
-
-    def literal(self) -> str:
-        """Returns this query's statement as raw SQL with inline literal binds."""
-        return literalstatement(self)
 
     def from_(self, *args: Any, **kwargs: Any) -> Select:
         """Simple alias for the 'select_from' method. See that method's docstring for documentation."""
@@ -142,7 +138,7 @@ class Update(ExpressionMixin, alch.sql.Update):
         return f"{type(self).__name__}(\n{(str(self))}\n)"
 
     def __str__(self) -> str:
-        return self.literal()
+        return literal_statement(self)
 
     def resolve(self, silently: bool = False) -> None:
         """Execute this statement with surrounding Select statements as applicable, and request user confirmation to commit if Sql.autocommit is False, else commit the transaction."""
@@ -151,10 +147,6 @@ class Update(ExpressionMixin, alch.sql.Update):
         self._execute_expression_and_determine_rowcount()
         self._perform_post_select(pre_select_object=pre_select_object, silently=silently)
         self._resolve_tran()
-
-    def literal(self) -> str:
-        """Returns this query's statement as raw SQL with inline literal binds."""
-        return literalstatement(self)
 
     def set_(self, *args: Any, **kwargs: Any) -> Update:
         """Simple alias for the 'values' method. See that method's docstring for documentation."""
@@ -168,7 +160,7 @@ class Insert(ExpressionMixin, alch.sql.Insert):
         return f"{type(self).__name__}(\n{(str(self))}\n)"
 
     def __str__(self) -> str:
-        return self.literal()
+        return literal_statement(self)
 
     def resolve(self, silently: bool = False) -> None:
         """Execute this statement with surrounding Select statements as applicable, and request user confirmation to commit if Sql.autocommit is False, else commit the transaction."""
@@ -177,11 +169,6 @@ class Insert(ExpressionMixin, alch.sql.Insert):
         rowcount = self._execute_expression_and_determine_rowcount(rowcount=rowcount)
         self._perform_post_select_inserts(rowcount=rowcount, silently=silently)
         self._resolve_tran()
-
-    def literal(self) -> str:
-        """Returns this query's statement as raw SQL with inline literal binds."""
-        literal = literalstatement(self)
-        return literal
 
     def values(self, *args: Any, **kwargs: Any) -> Insert:
         """Insert the given values as either a single dict, or a list of dicts."""
@@ -199,7 +186,7 @@ class Delete(ExpressionMixin, alch.sql.Delete):
         return f"{type(self).__name__}(\n{(str(self))}\n)"
 
     def __str__(self) -> str:
-        return self.literal()
+        return literal_statement(self)
 
     def resolve(self, silently: bool = False) -> None:
         """Execute this statement with surrounding Select statements as applicable, and request user confirmation to commit if Sql.autocommit is False, else commit the transaction."""
@@ -207,10 +194,6 @@ class Delete(ExpressionMixin, alch.sql.Delete):
         self._perform_pre_select(silently=silently)
         self._execute_expression_and_determine_rowcount()
         self._resolve_tran()
-
-    def literal(self) -> str:
-        """Returns this query's statement as raw SQL with inline literal binds."""
-        return literalstatement(self)
 
 
 class SelectInto(ExpressionMixin, alch.sql.Select):
@@ -224,7 +207,7 @@ class SelectInto(ExpressionMixin, alch.sql.Select):
         return f"{type(self).__name__}(\n{(str(self))}\n)"
 
     def __str__(self) -> str:
-        return self.literal()
+        return literal_statement(self)
 
     def resolve(self, silently: bool = False) -> None:
         """Execute this statement with surrounding Select statements as applicable, and request user confirmation to commit if Sql.autocommit is False, else commit the transaction."""
@@ -232,10 +215,6 @@ class SelectInto(ExpressionMixin, alch.sql.Select):
         self._execute_expression_and_determine_rowcount()
         self._perform_post_select_all(silently=silently)
         self._resolve_tran(force_commit=True)
-
-    def literal(self) -> str:
-        """Returns this query's statement as raw SQL with inline literal binds."""
-        return literalstatement(self)
 
 
 @compiles(SelectInto)  # type:ignore

@@ -1,4 +1,4 @@
-__all__ = ["SqlConfig", "DjangoModel", "sql"]
+__all__ = ["SqlConfig", "DjangoModel", "DjangoSql", "sql"]
 
 from typing import Optional
 

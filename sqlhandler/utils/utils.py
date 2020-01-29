@@ -11,7 +11,7 @@ from subtypes import Frame, Str
 from pathmagic import File, PathLike
 
 if TYPE_CHECKING:
-    from .sql import Sql
+    from sqlhandler import Sql
 
 
 SelfType = TypeVar("SelfType")
@@ -130,7 +130,7 @@ class TempManager:
         return self._table
 
 
-def literalstatement(statement: Any, format_statement: bool = True) -> str:
+def literal_statement(statement: Any, format_statement: bool = True) -> str:
     """Returns this a query or expression object's statement as raw SQL with inline literal binds."""
 
     if isinstance(statement, Query):

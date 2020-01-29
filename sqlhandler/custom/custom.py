@@ -5,16 +5,11 @@ from typing import Any, Union, Dict, Callable, Optional, TYPE_CHECKING
 import pandas as pd
 
 import sqlalchemy as alch
-
 from sqlalchemy import Column, true, null, func
 from sqlalchemy import types
-
 from sqlalchemy.schema import CreateTable
-
 from sqlalchemy.sql.base import ImmutableColumnCollection
 from sqlalchemy.sql.schema import _get_table_key
-
-
 from sqlalchemy.orm import backref, relationship
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.orm.util import AliasedClass
@@ -22,14 +17,14 @@ from sqlalchemy.orm.mapper import Mapper
 
 from sqlalchemy.ext.declarative import declared_attr, DeclarativeMeta
 
-
 from subtypes import Str, Dict_, Enum
 
-from .utils import literalstatement
 from .override import SubtypesDateTime
 
+from sqlhandler.utils import literal_statement
+
 if TYPE_CHECKING:
-    from .database import Metadata
+    from sqlhandler.database import Metadata
 
 # TODO: Find way to implement ONE_TO_MANY relationship by extending the previous model with a foreign key after the fact
 
@@ -65,8 +60,7 @@ class ModelMeta(DeclarativeMeta):
     def __new__(mcs, name: str, bases: tuple, namespace: dict) -> ModelMeta:
         abs_ns = absolute_namespace(bases=bases, namespace=namespace)
 
-        relationships = {key: val for key, val in abs_ns.items() if isinstance(val, Relationship)}
-        if relationships:
+        if relationships := {key: val for key, val in abs_ns.items() if isinstance(val, Relationship)}:
             table_name = name
 
             try:
@@ -199,7 +193,7 @@ class Query(alch.orm.Query):
         return f"{type(self).__name__}(\n{(str(self))}\n)"
 
     def __str__(self) -> str:
-        return self.literal()
+        return literal_statement(self)
 
     def frame(self, labels: bool = False) -> pd.DataFrame:
         """Execute the query and return the result as a pandas DataFrame."""
@@ -212,10 +206,6 @@ class Query(alch.orm.Query):
             return [row[0] for row in vals]
         else:
             raise RuntimeError("Multiple columns selected. Expected exactly one value per row, got multiple.")
-
-    def literal(self) -> str:
-        """Returns this query's statement as raw SQL with inline literal binds."""
-        return literalstatement(self)
 
     def from_(self, *from_obj: Any) -> Query:
         """Simple alias for the 'select_from' method. See that method's docstring for documentation."""
