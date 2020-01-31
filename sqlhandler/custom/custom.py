@@ -30,14 +30,16 @@ if TYPE_CHECKING:
 
 
 class Table(alch.Table):
-    def __new__(*args, **kwargs) -> Table:
+    def __new__(*args: Any, **kwargs: Any) -> Table:
         _, name, meta, *_ = args
         if (schema := kwargs.get("schema")) is None:
             schema = meta.schema
 
-        if (key := _get_table_key(name, schema)) in meta.tables:
-            meta.remove(meta.tables[key])
+        if kwargs.get("is_declarative", False):
+            if (table := meta.tables.get(_get_table_key(name, schema))) is not None:
+                meta.remove(table)
 
+        print(f"Creating table {_get_table_key(name, schema)}!")
         return alch.Table.__new__(*args, **kwargs)
 
 
@@ -108,6 +110,10 @@ class Model:
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}({', '.join([f'{col.name}={repr(getattr(self, col.name))}' for col in type(self).__table__.columns])})"
+
+    @declared_attr
+    def __table_args__(cls):
+        return dict(schema=cls.metadata.sql.database.default_schema, is_declarative=True)
 
     def insert(self) -> Model:
         """Emit an insert statement for this object against this model's underlying table."""

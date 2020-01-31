@@ -20,7 +20,7 @@ from iotools.misc.serializer import LostObject
 
 from sqlhandler.custom import ModelMeta, Model, AutoModel, Query, Session, ForeignKey, Relationship, SubtypesDateTime, SubtypesDate, BitLiteral, Select, Update, Insert, Delete, SelectInto
 from sqlhandler.utils import StoredProcedure, Script, SqlLog
-from sqlhandler.database import Database, OrmSchemas, ObjectSchemas, OrmSchema, ObjectSchema, Metadata
+from sqlhandler.database import Database, Metadata, Schemas, Schema
 from sqlhandler.utils import Config, Url
 
 if TYPE_CHECKING:
@@ -40,7 +40,7 @@ class Sql:
 
     class Constructors:
         ModelMeta, Model, AutoModel = ModelMeta, Model, AutoModel
-        Database, OrmSchemas, ObjectSchemas, OrmSchema, ObjectSchema, Metadata = Database, OrmSchemas, ObjectSchemas, OrmSchema, ObjectSchema, Metadata
+        Database, Metadata, Schemas, Schema = Database, Metadata, Schemas, Schema
         Config, Query, Session = Config, Query, Session
         StoredProcedure, Script = StoredProcedure, Script
         Config, Frame = Config, Frame
@@ -100,14 +100,14 @@ class Sql:
         return self.database.auto_model
 
     @property
-    def orm(self) -> OrmSchemas:
+    def tables(self) -> Schemas:
         """Property controlling access to mapped models. Models will only appear for tables that have a primary key, and never for views. Schemas must be accessed before tables: E.g. Sql().orm.some_schema.some_table"""
-        return self.database.orm
+        return self.database.tables
 
     @property
-    def objects(self) -> ObjectSchemas:
+    def views(self) -> Schemas:
         """Property controlling access to raw database objects. Schemas must be accessed before tables: E.g. Sql().orm.some_schema.some_table"""
-        return self.database.objects
+        return self.database.views
 
     @cached_property
     def operations(self) -> Operations:
@@ -180,9 +180,9 @@ class Sql:
 
         dataframe.to_sql(engine=self.engine, name=table, if_exists=if_exists, index=False, primary_key=primary_key, schema=schema, dtype=dtypes)
 
-        table_object = self.orm[schema][table]
-        self.database.refresh_table(table=table_object)
-        return self.orm[schema][table]
+        model = self.tables[schema][table]()
+        self.database.refresh_table(table=model.__table__)
+        return self.tables[schema][table]()
 
     def orm_to_frame(self, orm_objects: Any) -> Frame:
         """Convert a homogeneous list of sqlalchemy.orm instance objects (or a single one) to a pandas DataFrame."""
