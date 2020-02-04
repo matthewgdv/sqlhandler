@@ -1,9 +1,11 @@
 from __future__ import annotations
 
-from typing import Optional
+from typing import Optional, Set
 
 
 class ObjectName:
+    object_type = "object"
+
     def __init__(self, stem: str, schema: SchemaName) -> None:
         self.stem, self.schema, self.name = stem, schema, stem if schema.name is None else f"{schema.name}.{stem}"
 
@@ -18,6 +20,14 @@ class ObjectName:
 
     def __hash__(self) -> int:
         return id(self)
+
+
+class TableName(ObjectName):
+    object_type = "table"
+
+
+class ViewName(ObjectName):
+    object_type = "view"
 
 
 class SchemaName:
@@ -36,3 +46,13 @@ class SchemaName:
 
     def __hash__(self) -> int:
         return id(self)
+
+
+class SchemaShape(dict):
+    def all_objects(self) -> Set[ObjectName]:
+        ret = set()
+
+        for names in self.values():
+            ret |= names
+
+        return ret

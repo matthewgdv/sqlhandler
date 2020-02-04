@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any, Union, Set, Callable, TYPE_CHECKING, cast
+from typing import Any, Union, Set, Callable, TYPE_CHECKING, cast, Type
 
 import sqlalchemy as alch
 from sqlalchemy import Column, Integer
@@ -13,7 +13,7 @@ from miscutils import cached_property
 from iotools import Cache
 
 from .meta import NullRegistry, Metadata
-from .name import SchemaName, ObjectName
+from .name import SchemaName, ObjectName, SchemaShape, ViewName, TableName
 from .schema import Schemas, ObjectProxy
 
 from sqlhandler.custom import Model, AutoModel, Table
@@ -28,6 +28,7 @@ class Database:
 
     def __init__(self, sql: Sql) -> None:
         self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=sql.config.folder.new_file("sql_cache", "pkl"), days=5)
+        self._determine_shape()
         self.meta = self._get_metadata()
 
         self.model = cast(Model, declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.constructors.Model, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.Model.__name__, class_registry=self._null_registry))
@@ -48,46 +49,50 @@ class Database:
         if name := alch.inspect(self.sql.engine).default_schema_name:
             return name
         else:
-            name, = alch.inspect(self.sql.engine).get_schema_names()
-            return name
+            name, = self._schemas
+            return name.name
 
     def schema_names(self) -> Set[SchemaName]:
         return {SchemaName(name=name, default=self.default_schema) for name in alch.inspect(self.sql.engine).get_schema_names()}
 
-    def table_names(self, schema: SchemaName) -> Set[ObjectName]:
-        return {ObjectName(stem=name, schema=schema) for name in alch.inspect(self.sql.engine).get_table_names(schema=schema.name)}
+    def table_names(self, schema: SchemaName) -> Set[TableName]:
+        return {TableName(stem=name, schema=schema) for name in alch.inspect(self.sql.engine).get_table_names(schema=schema.name)}
 
-    def view_names(self, schema: SchemaName) -> Set[ObjectName]:
-        return {ObjectName(stem=name, schema=schema) for name in alch.inspect(self.sql.engine).get_view_names(schema=schema.name)}
+    def view_names(self, schema: SchemaName) -> Set[ViewName]:
+        return {ViewName(stem=name, schema=schema) for name in alch.inspect(self.sql.engine).get_view_names(schema=schema.name)}
 
     def create_table(self, table: Table) -> None:
         """Emit a create table statement to the database from the given table object."""
         table = self._normalize_table(table)
         table.create()
-        self._reflect_object_with_autoload(self._name_from_table(table))
+        self._reflect_object_with_autoload(self._name_from_object(table, object_type=TableName))
+        self._determine_shape()
 
     def drop_table(self, table: Table) -> None:
         """Emit a drop table statement to the database for the given table object."""
         table = self._normalize_table(table)
         table.drop()
         self._remove_object_if_exists(table)
+        self._determine_shape()
 
     def refresh_table(self, table: Table) -> None:
         """Reflect the given table object again."""
         table = self._normalize_table(table)
         self._remove_object_if_exists(table)
-        self._reflect_object_with_autoload(self._name_from_table(table))
+        self._reflect_object_with_autoload(self._name_from_object(table, object_type=TableName))
+        self._determine_shape()
 
     def exists_table(self, table: Table) -> bool:
         table = self._normalize_table(table)
         with self.sql.engine.connect() as con:
             return self.sql.engine.dialect.has_table(con, table.name, schema=table.schema)
 
-    def clear(self) -> None:
-        """Clear this database's metadata as well as its cache."""
+    def reset(self) -> None:
+        """Clear this database's metadata as well as its cache and reflect everything from scratch."""
         self.meta.clear()
         self._cache_metadata()
 
+        self._determine_shape()
         self._reset_accessors()
         self._sync_with_db()
 
@@ -112,31 +117,37 @@ class Database:
         self._remove_stale_metadata_objects()
         self._prepare_accessors()
 
+    def _determine_shape(self) -> None:
+        self._schemas = self.schema_names()
+        self._tables = SchemaShape({schema: {name for name in self.table_names(schema=schema)} for schema in self._schemas})
+        self._views = SchemaShape({schema: {name for name in self.view_names(schema=schema)} for schema in self._schemas})
+
     def _prepare_accessors(self) -> None:
         self._prepare_schema_accessors()
-        for schema in self.schema_names():
+        for schema in self._schemas:
             self._prepare_object_accessors(schema=schema)
 
     def _prepare_schema_accessors(self) -> None:
         for accessor in (self.tables, self.views):
-            for schema in self.schema_names():
+            for schema in self._schemas:
                 if schema not in accessor:
                     accessor[schema.name] = self.sql.constructors.Schema(parent=accessor, name=schema)
 
     def _prepare_object_accessors(self, schema: SchemaName) -> None:
-        for accessor, names in [(self.tables, self.table_names), (self.views, self.view_names)]:
+        for accessor, names in [(self.tables, self._tables), (self.views, self._views)]:
             schema_accessor = accessor[schema.name]
-            for name in names(schema=schema):
+            for name in names.get(schema, set()):
                 if name not in schema_accessor:
                     schema_accessor[name.stem] = ObjectProxy(name=name, parent=schema_accessor, database=self)
 
     def _reflect_database(self):
-        for schema in self.schema_names():
+        for schema in self._schemas:
             self._reflect_schema(schema=schema)
 
     def _reflect_schema(self, schema: SchemaName):
-        for name in (self.table_names(schema=schema) | self.view_names(schema=schema)):
-            self._reflect_object(name=name)
+        for names in (self._tables.get(schema, set()), self._views.get(schema, set())):
+            for name in names:
+                self._reflect_object(name=name)
 
         self._autoload_schema(schema=schema)
 
@@ -146,7 +157,7 @@ class Database:
 
     # noinspection PyArgumentList
     def _reflect_object(self, name: ObjectName) -> Table:
-        print(f"Reflecting table: {name.name} with schema {name.schema} and meta {self.meta}")
+        print(f"Reflecting {name.object_type}: {name.name}")
         if alch.inspect(self.sql.engine).get_pk_constraint(name.stem, schema=name.schema.name)["constrained_columns"]:
             table = Table(name.stem, self.meta, schema=name.schema.name, autoload=True)
         else:
@@ -155,12 +166,9 @@ class Database:
         return table
 
     def _remove_stale_metadata_objects(self):
-        db_names = set()
-        for schema in self.schema_names():
-            db_names |= self.table_names(schema=schema) | self.view_names(schema=schema)
-
+        all_objects = self._tables.all_objects() | self._views.all_objects()
         for _, item in self.meta.tables.items():
-            if self._name_from_table(item) not in db_names:
+            if self._name_from_object(item) not in all_objects:
                 self._remove_object_if_exists(item)
 
     def _autoload_schema(self, schema: SchemaName) -> None:
@@ -172,8 +180,8 @@ class Database:
         if models := {model.__table__.name: model for model in automap.classes}:
             self._prepare_object_accessors(schema=schema)
 
-        for names, accessor in [(self.table_names, self.tables), (self.view_names, self.views)]:
-            object_stems = {name.stem for name in names(schema=schema)}
+        for names, accessor in [(self._tables, self.tables), (self._views, self.views)]:
+            object_stems = {name.stem for name in names.get(schema, set())}
             objects = {stem: model for stem, model in models.items() if stem in object_stems}
             accessor[schema.name]._registry.update(objects)
 
@@ -181,14 +189,13 @@ class Database:
         if table in self.meta:
             self._remove_object_from_metadata(table=table)
 
-        self._remove_object_from_accessors(table=table)
+        self._remove_object_from_accessors(name=self._name_from_object(table=table))
 
     def _remove_object_from_metadata(self, table: Table) -> None:
         self.meta.remove(table)
         self._cache_metadata()
 
-    def _remove_object_from_accessors(self, table: Table) -> None:
-        name = self._name_from_table(table=table)
+    def _remove_object_from_accessors(self, name: ObjectName) -> None:
         for accessor in (self.tables, self.views):
             (schema_accessor := accessor[name.schema.name])._registry.pop(name.stem)
             if name.stem in schema_accessor:
@@ -199,8 +206,8 @@ class Database:
             for schema, _ in accessor:
                 del accessor[schema]
 
-    def _name_from_table(self, table: Table) -> ObjectName:
-        return ObjectName(stem=table.name, schema=SchemaName(table.schema, default=self.default_schema))
+    def _name_from_object(self, table: Table, object_type: Type[ObjectName] = ObjectName) -> ObjectName:
+        return object_type(stem=table.name, schema=SchemaName(table.schema, default=self.default_schema))
 
     def _normalize_table(self, table: Union[Model, Table, str]) -> Table:
         return self.meta.tables[table] if isinstance(table, str) else Maybe(table).__table__.else_(table)

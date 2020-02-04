@@ -39,7 +39,6 @@ class Table(alch.Table):
             if (table := meta.tables.get(_get_table_key(name, schema))) is not None:
                 meta.remove(table)
 
-        print(f"Creating table {_get_table_key(name, schema)}!")
         return alch.Table.__new__(*args, **kwargs)
 
 
