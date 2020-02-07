@@ -18,6 +18,9 @@ class Metadata(alch.MetaData):
     def __repr__(self) -> str:
         return f"{type(self).__name__}(tables={len(self.tables)})"
 
+    def __bool__(self) -> bool:
+        return bool(self.tables)
+
 
 class NullRegistry(dict):
     def __setitem__(self, key: Any, val: Any) -> None:

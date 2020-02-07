@@ -31,11 +31,14 @@ if TYPE_CHECKING:
 
 class Table(alch.Table):
     def __new__(*args: Any, **kwargs: Any) -> Table:
-        _, name, meta, *_ = args
-        if (schema := kwargs.get("schema")) is None:
-            schema = meta.schema
+        if len(args) == 1:
+            return alch.Table.__new__(*args, **kwargs)
 
+        _, name, meta, *_ = args
         if kwargs.get("is_declarative", False):
+            if (schema := kwargs.get("schema")) is None:
+                schema = meta.schema
+
             if (table := meta.tables.get(_get_table_key(name, schema))) is not None:
                 meta.remove(table)
 
@@ -101,7 +104,7 @@ class ModelMeta(DeclarativeMeta):
         cls.metadata.sql.database.drop_table(cls)
 
 
-class Model:
+class BaseModel:
     """Custom base class for declarative and automap bases to inherit from. Represents a mapped table in a sql database."""
     __table__: Table
     metadata: Metadata
@@ -110,16 +113,12 @@ class Model:
     def __repr__(self) -> str:
         return f"{type(self).__name__}({', '.join([f'{col.name}={repr(getattr(self, col.name))}' for col in type(self).__table__.columns])})"
 
-    @declared_attr
-    def __table_args__(cls):
-        return dict(schema=cls.metadata.sql.database.default_schema, is_declarative=True)
-
-    def insert(self) -> Model:
+    def insert(self) -> BaseModel:
         """Emit an insert statement for this object against this model's underlying table."""
         self.metadata.sql.session.add(self)
         return self
 
-    def update(self, argdeltas: Dict[Union[str, InstrumentedAttribute], Any] = None, **update_kwargs: Any) -> Model:
+    def update(self, argdeltas: Dict[Union[str, InstrumentedAttribute], Any] = None, **update_kwargs: Any) -> BaseModel:
         """
         Emit an update statement against database record represented by this object in this model's underlying table.
         This method positionally accepts a dict where the keys are the model's class attributes (of type InstrumentedAttribute) and the values are the values to update to.
@@ -145,15 +144,21 @@ class Model:
 
         return self
 
-    def delete(self) -> Model:
+    def delete(self) -> BaseModel:
         """Emit a delete statement for this object against this model's underlying table."""
         self.metadata.sql.session.delete(self)
         return self
 
-    def clone(self, argdeltas: Dict[Union[str, InstrumentedAttribute], Any] = None, **update_kwargs: Any) -> Model:
+    def clone(self, argdeltas: Dict[Union[str, InstrumentedAttribute], Any] = None, **update_kwargs: Any) -> BaseModel:
         """Create a clone (new primary_key, but copies of all other attributes) of this object in the detached state. Model.insert() will be required to persist it to the database."""
         valid_cols = [col.name for col in self.__table__.columns if col.name not in self.__table__.primary_key.columns]
         return type(self)(**{col: getattr(self, col) for col in valid_cols}).update(argdeltas, **update_kwargs)
+
+
+class Model(BaseModel):
+    @declared_attr
+    def __table_args__(cls):
+        return dict(schema=cls.metadata.sql.database.default_schema, is_declarative=True)
 
 
 class AutoModel(Model):
@@ -175,6 +180,10 @@ class AutoModel(Model):
     @declared_attr
     def active(cls):
         return Column(types.Boolean, nullable=False, server_default=true())
+
+
+class ReflectedModel(BaseModel):
+    pass
 
 
 class Session(alch.orm.Session):
@@ -302,23 +311,23 @@ class Relationship:
         self._build_relationship()
 
     def _build_fk_columns(self) -> None:
-        if self.kind == Relationship.Kind.MANY_TO_ONE:
+        if self.kind == self.Kind.MANY_TO_ONE:
             self.this.namespace[self.target.fk] = Column(types.Integer, ForeignKey(self.target.pk))
-        elif self.kind == Relationship.Kind.ONE_TO_ONE:
+        elif self.kind == self.Kind.ONE_TO_ONE:
             self.this.namespace[self.target.fk] = Column(types.Integer, ForeignKey(self.target.pk), unique=True)
         else:
-            Relationship.Kind.raise_if_not_a_member(self.kind)
+            self.Kind(self.kind)
 
     def _build_relationship(self) -> None:
         if self.backref_name is not None:
             backref_name = self.backref_name
         else:
-            if self.kind == Relationship.Kind.ONE_TO_ONE:
+            if self.kind == self.Kind.ONE_TO_ONE:
                 backref_name = self.this.name
-            elif self.kind in (Relationship.Kind.MANY_TO_ONE, Relationship.Kind.MANY_TO_MANY):
+            elif self.kind in (self.Kind.MANY_TO_ONE, self.Kind.MANY_TO_MANY):
                 backref_name = self.this.plural
             else:
-                Relationship.Kind.raise_if_not_a_member(self.kind)
+                self.Kind(self.kind)
                 backref_name = None
 
         if self.kind == Relationship.Kind.ONE_TO_ONE:

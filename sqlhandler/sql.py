@@ -18,7 +18,7 @@ from pathmagic import File
 from miscutils import cached_property
 from iotools.misc.serializer import LostObject
 
-from sqlhandler.custom import ModelMeta, Model, AutoModel, Query, Session, ForeignKey, Relationship, SubtypesDateTime, SubtypesDate, BitLiteral, Select, Update, Insert, Delete, SelectInto
+from sqlhandler.custom import ModelMeta, Model, AutoModel, ReflectedModel, Query, Session, ForeignKey, Relationship, SubtypesDateTime, SubtypesDate, BitLiteral, Select, Update, Insert, Delete, SelectInto
 from sqlhandler.utils import StoredProcedure, Script, SqlLog
 from sqlhandler.database import Database, Metadata, Schemas, Schema
 from sqlhandler.utils import Config, Url
@@ -39,7 +39,7 @@ class Sql:
         FAIL, REPLACE, APPEND = "fail", "replace", "append"
 
     class Constructors:
-        ModelMeta, Model, AutoModel = ModelMeta, Model, AutoModel
+        ModelMeta, Model, AutoModel, ReflectedModel = ModelMeta, Model, AutoModel, ReflectedModel
         Database, Metadata, Schemas, Schema = Database, Metadata, Schemas, Schema
         Config, Query, Session = Config, Query, Session
         StoredProcedure, Script = StoredProcedure, Script
@@ -47,7 +47,8 @@ class Sql:
 
     constructors = Constructors()
 
-    CACHE_METADATA = True
+    CACHE_METADATA, EAGER_REFLECTION = True, True
+    LAZY_SCHEMAS = {"information_schema"}
 
     def __init__(self, connection: str = None, database: str = None, log: File = None, autocommit: bool = False) -> None:
         self.config = self.constructors.Config()

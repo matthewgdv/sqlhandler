@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import warnings
 from typing import Any, Union, Set, Callable, TYPE_CHECKING, cast, Type
 
 import sqlalchemy as alch
@@ -9,7 +10,7 @@ from sqlalchemy.ext.declarative import declarative_base
 
 from maybe import Maybe
 from subtypes import Str
-from miscutils import cached_property
+from miscutils import cached_property, PercentagePrinter, Printer
 from iotools import Cache
 
 from .meta import NullRegistry, Metadata
@@ -28,7 +29,6 @@ class Database:
 
     def __init__(self, sql: Sql) -> None:
         self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=sql.config.folder.new_file("sql_cache", "pkl"), days=5)
-        self._determine_shape()
         self.meta = self._get_metadata()
 
         self.model = cast(Model, declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.constructors.Model, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.Model.__name__, class_registry=self._null_registry))
@@ -49,7 +49,7 @@ class Database:
         if name := alch.inspect(self.sql.engine).default_schema_name:
             return name
         else:
-            name, = self._schemas
+            name, = alch.inspect(self.sql.engine).get_schema_names()
             return name.name
 
     def schema_names(self) -> Set[SchemaName]:
@@ -92,7 +92,6 @@ class Database:
         self.meta.clear()
         self._cache_metadata()
 
-        self._determine_shape()
         self._reset_accessors()
         self._sync_with_db()
 
@@ -102,7 +101,8 @@ class Database:
 
         try:
             meta = self.cache.setdefault(self.name, self.sql.constructors.Metadata())
-        except Exception:
+        except Exception as ex:
+            warnings.warn(f"The following exception ocurred when attempting to retrieve the previously cached Metadata, but was supressed:\n\n{ex}\n\nStarting with blank Metadata...")
             meta = self.sql.constructors.Metadata()
 
         meta.bind, meta.sql = self.sql.engine, self.sql
@@ -114,8 +114,16 @@ class Database:
             self.cache[self.name] = self.meta
 
     def _sync_with_db(self) -> None:
-        self._remove_stale_metadata_objects()
+        self._determine_shape()
         self._prepare_accessors()
+
+        if not self.meta and self.sql.EAGER_REFLECTION:
+            self._reflect_database()
+            self._cache_metadata()
+        else:
+            self._autoload_database()
+
+        self._remove_stale_metadata_objects()
 
     def _determine_shape(self) -> None:
         self._schemas = self.schema_names()
@@ -141,13 +149,15 @@ class Database:
                     schema_accessor[name.stem] = ObjectProxy(name=name, parent=schema_accessor, database=self)
 
     def _reflect_database(self):
-        for schema in self._schemas:
-            self._reflect_schema(schema=schema)
+        for schema in PercentagePrinter(sorted(self._schemas, key=lambda name: name.name), formatter=lambda name: f"Reflecting schema: {name.name}"):
+            if schema.name not in self.sql.LAZY_SCHEMAS:
+                with Printer.from_indentation():
+                    self._reflect_schema(schema=schema)
 
     def _reflect_schema(self, schema: SchemaName):
-        for names in (self._tables.get(schema, set()), self._views.get(schema, set())):
-            for name in names:
-                self._reflect_object(name=name)
+        names = [name for names in (self._tables.get(schema, set()), self._views.get(schema, set())) for name in names]
+        for name in PercentagePrinter(names, formatter=lambda name: f"Reflecting {name.object_type}: {name.name}"):
+            self._reflect_object(name=name)
 
         self._autoload_schema(schema=schema)
 
@@ -157,22 +167,23 @@ class Database:
 
     # noinspection PyArgumentList
     def _reflect_object(self, name: ObjectName) -> Table:
-        print(f"Reflecting {name.object_type}: {name.name}")
-        if alch.inspect(self.sql.engine).get_pk_constraint(name.stem, schema=name.schema.name)["constrained_columns"]:
-            table = Table(name.stem, self.meta, schema=name.schema.name, autoload=True)
-        else:
-            table = Table(name.stem, self.meta, Column("__pk__", Integer, primary_key=True), schema=name.schema.name, autoload=True)
+        if not (table := Table(name.stem, self.meta, schema=name.schema.name, autoload=True)).primary_key:
+            table = Table(name.stem, self.meta, Column("__pk__", Integer, primary_key=True), schema=name.schema.name, autoload=True, extend_existing=True)
 
         return table
 
     def _remove_stale_metadata_objects(self):
         all_objects = self._tables.all_objects() | self._views.all_objects()
-        for _, item in self.meta.tables.items():
+        for item in list(self.meta.tables.values()):
             if self._name_from_object(item) not in all_objects:
                 self._remove_object_if_exists(item)
 
+    def _autoload_database(self) -> None:
+        for schema in self._schemas:
+            self._autoload_schema(schema)
+
     def _autoload_schema(self, schema: SchemaName) -> None:
-        model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.constructors.Model, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.Model.__name__, class_registry={})
+        model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.constructors.ReflectedModel, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.ReflectedModel.__name__, class_registry={})
 
         automap = automap_base(declarative_base=model)
         automap.prepare(schema=schema.name, classname_for_table=self._table_name(), name_for_scalar_relationship=self._scalar_name(), name_for_collection_relationship=self._collection_name())
@@ -180,10 +191,10 @@ class Database:
         if models := {model.__table__.name: model for model in automap.classes}:
             self._prepare_object_accessors(schema=schema)
 
-        for names, accessor in [(self._tables, self.tables), (self._views, self.views)]:
-            object_stems = {name.stem for name in names.get(schema, set())}
-            objects = {stem: model for stem, model in models.items() if stem in object_stems}
-            accessor[schema.name]._registry.update(objects)
+            for names, accessor in [(self._tables, self.tables), (self._views, self.views)]:
+                object_stems = {name.stem for name in names.get(schema, set())}
+                objects = {stem: model for stem, model in models.items() if stem in object_stems}
+                accessor[schema.name]._registry.update(objects)
 
     def _remove_object_if_exists(self, table: Table) -> None:
         if table in self.meta:
@@ -197,7 +208,7 @@ class Database:
 
     def _remove_object_from_accessors(self, name: ObjectName) -> None:
         for accessor in (self.tables, self.views):
-            (schema_accessor := accessor[name.schema.name])._registry.pop(name.stem)
+            (schema_accessor := accessor[name.schema.name])._registry.pop(name.stem, None)
             if name.stem in schema_accessor:
                 del schema_accessor[name.stem]
 

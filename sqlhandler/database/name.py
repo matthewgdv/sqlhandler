@@ -19,7 +19,7 @@ class ObjectName:
         return self.name == other.name
 
     def __hash__(self) -> int:
-        return id(self)
+        return hash(self.name)
 
 
 class TableName(ObjectName):
@@ -45,7 +45,7 @@ class SchemaName:
         return self.name == other.name
 
     def __hash__(self) -> int:
-        return id(self)
+        return hash(self.name)
 
 
 class SchemaShape(dict):
