@@ -47,8 +47,8 @@ class Sql:
 
     constructors = Constructors()
 
-    CACHE_METADATA, EAGER_REFLECTION = True, True
-    LAZY_SCHEMAS = {"information_schema"}
+    CACHE_METADATA, EAGER_REFLECTION = True, False
+    LAZY_SCHEMAS = {"information_schema",}
 
     def __init__(self, connection: str = None, database: str = None, log: File = None, autocommit: bool = False) -> None:
         self.config = self.constructors.Config()

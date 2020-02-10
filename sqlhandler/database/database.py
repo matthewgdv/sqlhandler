@@ -183,18 +183,18 @@ class Database:
             self._autoload_schema(schema)
 
     def _autoload_schema(self, schema: SchemaName) -> None:
-        model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.constructors.ReflectedModel, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.ReflectedModel.__name__, class_registry={})
+        model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.constructors.ReflectedModel, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.ReflectedModel.__name__, class_registry=(registry := {}))
 
         automap = automap_base(declarative_base=model)
         automap.prepare(schema=schema.name, classname_for_table=self._table_name(), name_for_scalar_relationship=self._scalar_name(), name_for_collection_relationship=self._collection_name())
 
-        if models := {model.__table__.name: model for model in automap.classes}:
-            self._prepare_object_accessors(schema=schema)
+        self.tables[schema.name]._base = self.views[schema.name]._base = automap
+        self.tables[schema.name]._registry = self.views[schema.name]._registry = registry
 
+        if models := {model.__table__.name: model for model in automap.classes}:
             for names, accessor in [(self._tables, self.tables), (self._views, self.views)]:
                 object_stems = {name.stem for name in names.get(schema, set())}
                 objects = {stem: model for stem, model in models.items() if stem in object_stems}
-                accessor[schema.name]._registry.update(objects)
 
     def _remove_object_if_exists(self, table: Table) -> None:
         if table in self.meta:

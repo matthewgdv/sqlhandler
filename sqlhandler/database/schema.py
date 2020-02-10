@@ -45,6 +45,7 @@ class Schema(NameSpace):
     def __init__(self, name: SchemaName, parent: Schemas) -> None:
         self._name, self._parent, self._database = name, parent, parent._database
         self._registry: Dict[str, Model] = {}
+        self._base: Type[ReflectedModel] = None
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name='{self._name}', num_tables={len(self)}, tables={[table for table, _ in self]})"
