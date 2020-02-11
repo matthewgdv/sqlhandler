@@ -65,22 +65,20 @@ class Database:
         """Emit a create table statement to the database from the given table object."""
         table = self._normalize_table(table)
         table.create()
+        self._sync_with_db()
         self._reflect_object_with_autoload(self._name_from_object(table, object_type=TableName))
-        self._determine_shape()
 
     def drop_table(self, table: Table) -> None:
         """Emit a drop table statement to the database for the given table object."""
         table = self._normalize_table(table)
         table.drop()
-        self._remove_object_if_exists(table)
-        self._determine_shape()
+        self._sync_with_db()
 
     def refresh_table(self, table: Table) -> None:
         """Reflect the given table object again."""
         table = self._normalize_table(table)
-        self._remove_object_if_exists(table)
+        self._sync_with_db()
         self._reflect_object_with_autoload(self._name_from_object(table, object_type=TableName))
-        self._determine_shape()
 
     def exists_table(self, table: Table) -> bool:
         table = self._normalize_table(table)
@@ -91,8 +89,6 @@ class Database:
         """Clear this database's metadata as well as its cache and reflect everything from scratch."""
         self.meta.clear()
         self._cache_metadata()
-
-        self._reset_accessors()
         self._sync_with_db()
 
     def _get_metadata(self) -> Metadata:
@@ -115,6 +111,7 @@ class Database:
 
     def _sync_with_db(self) -> None:
         self._determine_shape()
+        self._reset_accessors()
         self._prepare_accessors()
 
         if not self.meta and self.sql.settings.eager_reflection:
@@ -176,12 +173,6 @@ class Database:
 
         return table
 
-    def _remove_stale_metadata_objects(self):
-        all_objects = self._tables.all_objects() | self._views.all_objects()
-        for item in list(self.meta.tables.values()):
-            if self._name_from_object(item) not in all_objects:
-                self._remove_object_if_exists(item)
-
     def _autoload_database(self) -> None:
         for schema in self._schemas:
             self._autoload_schema(schema)
@@ -200,6 +191,12 @@ class Database:
 
         self.tables[schema.name]._base = self.views[schema.name]._base = automap
         self.tables[schema.name]._registry = self.views[schema.name]._registry = registry
+
+    def _remove_stale_metadata_objects(self):
+        all_objects = self._tables.all_objects() | self._views.all_objects()
+        for item in list(self.meta.tables.values()):
+            if self._name_from_object(item) not in all_objects:
+                self._remove_object_if_exists(item)
 
     def _remove_object_if_exists(self, table: Table) -> None:
         if table in self.meta:

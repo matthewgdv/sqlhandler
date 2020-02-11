@@ -202,7 +202,11 @@ class Sql:
 
     def _create_engine(self, connection: str, database: str) -> alch.engine.base.Engine:
         url = self._create_url(connection=connection, database=database)
-        return alch.create_engine(str(url), echo=False, dialect=self._customize_dialect(url.get_dialect()()))
+
+        engine = alch.create_engine(str(url), echo=False, dialect=self._customize_dialect(url.get_dialect()()))
+        engine.sql = self
+
+        return engine
 
     def _create_url(self, connection: str, database: str) -> Url:
         return self.config.generate_url(connection=connection, database=database)
