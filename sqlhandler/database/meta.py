@@ -6,12 +6,14 @@ import copy
 import sqlalchemy as alch
 from sqlalchemy.util import immutabledict
 
+from sqlhandler.database.name import SchemaName
+
 if TYPE_CHECKING:
     from sqlhandler import Sql
 
 
 class Metadata(alch.MetaData):
-    def __init__(self, sql: Sql = None) -> None:
+    def __init__(self, sql: Sql = None, **kwargs: Any) -> None:
         super().__init__()
         self.sql = sql
 
@@ -20,6 +22,11 @@ class Metadata(alch.MetaData):
 
     def __bool__(self) -> bool:
         return bool(self.tables)
+
+    def schema_subset(self, schema: SchemaName) -> Metadata:
+        meta = type(self)(sql=self.sql, bind=self.sql.engine)
+        meta.tables = type(self.tables)({name: table for name, table in self.tables.items() if table.schema == schema})
+        return meta
 
 
 class NullRegistry(dict):

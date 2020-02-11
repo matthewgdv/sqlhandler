@@ -41,8 +41,11 @@ class SchemaName:
     def __str__(self) -> str:
         return self.name
 
-    def __eq__(self, other: SchemaName) -> bool:
-        return self.name == other.name
+    def __eq__(self, other: [SchemaName, str]) -> bool:
+        if isinstance(other, type(self)):
+            return self.name == other.name
+        else:
+            return True if other is None and self.is_default else self.name == other
 
     def __hash__(self) -> int:
         return hash(self.name)

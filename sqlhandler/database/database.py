@@ -49,7 +49,7 @@ class Database:
         if name := alch.inspect(self.sql.engine).default_schema_name:
             return name
         else:
-            name, = alch.inspect(self.sql.engine).get_schema_names()
+            name, = alch.inspect(self.sql.engine).get_schema_names() or [None]
             return name.name
 
     def schema_names(self) -> Set[SchemaName]:
@@ -96,8 +96,8 @@ class Database:
         self._sync_with_db()
 
     def _get_metadata(self) -> Metadata:
-        if not self.sql.CACHE_METADATA:
-            return self.sql.constructors.Metadata(sql=self.sql)
+        if not self.sql.settings.cache_metadata:
+            return self.sql.constructors.Metadata(sql=self.sql, bind=self.sql.engine)
 
         try:
             meta = self.cache.setdefault(self.name, self.sql.constructors.Metadata())
@@ -110,18 +110,16 @@ class Database:
         return meta
 
     def _cache_metadata(self) -> None:
-        if self.sql.CACHE_METADATA:
+        if self.sql.settings.cache_metadata:
             self.cache[self.name] = self.meta
 
     def _sync_with_db(self) -> None:
         self._determine_shape()
         self._prepare_accessors()
 
-        if not self.meta and self.sql.EAGER_REFLECTION:
+        if not self.meta and self.sql.settings.eager_reflection:
             self._reflect_database()
             self._cache_metadata()
-        else:
-            self._autoload_database()
 
         self._remove_stale_metadata_objects()
 
@@ -150,13 +148,17 @@ class Database:
 
     def _reflect_database(self):
         for schema in PercentagePrinter(sorted(self._schemas, key=lambda name: name.name), formatter=lambda name: f"Reflecting schema: {name.name}"):
-            if schema.name not in self.sql.LAZY_SCHEMAS:
+            if schema.name not in self.sql.settings.lazy_schemas:
                 with Printer.from_indentation():
                     self._reflect_schema(schema=schema)
 
     def _reflect_schema(self, schema: SchemaName):
-        names = [name for names in (self._tables.get(schema, set()), self._views.get(schema, set())) for name in names]
-        for name in PercentagePrinter(names, formatter=lambda name: f"Reflecting {name.object_type}: {name.name}"):
+        names = sum([
+            sorted(collection.get(schema, set()), key=lambda name_: name_.name) if condition else set()
+            for condition, collection in [(self.sql.settings.reflect_tables, self._tables), (self.sql.settings.reflect_views, self._views)]
+        ], [])
+
+        for name in PercentagePrinter(names, formatter=lambda name_: f"Reflecting {name_.object_type}: {name_.name}"):
             self._reflect_object(name=name)
 
         self._autoload_schema(schema=schema)
@@ -183,18 +185,19 @@ class Database:
             self._autoload_schema(schema)
 
     def _autoload_schema(self, schema: SchemaName) -> None:
-        model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.constructors.ReflectedModel, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.ReflectedModel.__name__, class_registry=(registry := {}))
+        model = declarative_base(bind=self.sql.engine,
+                                 metadata=self.meta.schema_subset(schema),
+                                 cls=self.sql.constructors.ReflectedModel,
+                                 metaclass=self.sql.constructors.ModelMeta,
+                                 name=self.sql.constructors.ReflectedModel.__name__,
+                                 class_registry=(registry := {}))
 
         automap = automap_base(declarative_base=model)
-        automap.prepare(schema=schema.name, classname_for_table=self._table_name(), name_for_scalar_relationship=self._scalar_name(), name_for_collection_relationship=self._collection_name())
+        automap.prepare(classname_for_table=self._table_name(), name_for_scalar_relationship=self._scalar_name(), name_for_collection_relationship=self._collection_name())
+        automap.metadata = self.meta
 
         self.tables[schema.name]._base = self.views[schema.name]._base = automap
         self.tables[schema.name]._registry = self.views[schema.name]._registry = registry
-
-        if models := {model.__table__.name: model for model in automap.classes}:
-            for names, accessor in [(self._tables, self.tables), (self._views, self.views)]:
-                object_stems = {name.stem for name in names.get(schema, set())}
-                objects = {stem: model for stem, model in models.items() if stem in object_stems}
 
     def _remove_object_if_exists(self, table: Table) -> None:
         if table in self.meta:

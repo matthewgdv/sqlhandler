@@ -45,16 +45,16 @@ class Sql:
         StoredProcedure, Script = StoredProcedure, Script
         Config, Frame = Config, Frame
 
-    constructors = Constructors()
-
-    CACHE_METADATA, EAGER_REFLECTION = True, False
-    LAZY_SCHEMAS = {"information_schema",}
+    class Settings:
+        cache_metadata = reflect_tables = reflect_views = True
+        eager_reflection = False
+        lazy_schemas = {"information_schema"}
 
     def __init__(self, connection: str = None, database: str = None, log: File = None, autocommit: bool = False) -> None:
+        self.constructors, self.settings = self.Constructors(), self.Settings()
         self.config = self.constructors.Config()
 
         self.engine = self._create_engine(connection=connection, database=database)
-        self.engine.sql = self
         self.engine.connect()
 
         self.session = self.constructors.Session(bind=self.engine, query_cls=self.constructors.Query)

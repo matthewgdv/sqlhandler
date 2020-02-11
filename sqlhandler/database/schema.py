@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from typing import Any, TYPE_CHECKING, Dict
+from typing import Any, TYPE_CHECKING, Dict, Type, Optional
 
 from subtypes import NameSpace
 
 from .name import SchemaName, ObjectName
 
-from sqlhandler.custom import Model
+from sqlhandler.custom import Model, ReflectedModel
 
 if TYPE_CHECKING:
     from .database import Database
@@ -44,15 +44,16 @@ class Schema(NameSpace):
 
     def __init__(self, name: SchemaName, parent: Schemas) -> None:
         self._name, self._parent, self._database = name, parent, parent._database
-        self._registry: Dict[str, Model] = {}
-        self._base: Type[ReflectedModel] = None
+        self._registry: Optional[Dict[str, Model]] = None
+        self._base: Optional[Type[ReflectedModel]] = None
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name='{self._name}', num_tables={len(self)}, tables={[table for table, _ in self]})"
 
     def __call__(self, mapping: dict = None, / , **kwargs: Any) -> Schema:
         if mapping is None and not kwargs:
-            self._database._reflect_schema(self._name)
+            if not self._base:
+                self._database._reflect_schema(self._name)
         else:
             super().__call__(mapping, **kwargs)
 
