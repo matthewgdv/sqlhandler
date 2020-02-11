@@ -120,6 +120,8 @@ class Database:
         if not self.meta and self.sql.settings.eager_reflection:
             self._reflect_database()
             self._cache_metadata()
+        else:
+            self._autoload_database()
 
         self._remove_stale_metadata_objects()
 
