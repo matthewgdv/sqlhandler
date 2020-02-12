@@ -120,7 +120,7 @@ class Database:
         else:
             self._autoload_database()
 
-        self._remove_stale_metadata_objects()
+        self._remove_expired_metadata_objects()
 
     def _determine_shape(self) -> None:
         self._schemas = self.schema_names()
@@ -192,7 +192,7 @@ class Database:
         self.tables[schema.name]._base = self.views[schema.name]._base = automap
         self.tables[schema.name]._registry = self.views[schema.name]._registry = registry
 
-    def _remove_stale_metadata_objects(self):
+    def _remove_expired_metadata_objects(self):
         all_objects = self._tables.all_objects() | self._views.all_objects()
         for item in list(self.meta.tables.values()):
             if self._name_from_object(item) not in all_objects:

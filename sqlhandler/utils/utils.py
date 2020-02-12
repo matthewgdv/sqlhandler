@@ -45,8 +45,8 @@ class Executable(SqlBoundMixin, ABC):
     def execute(self, *args: Any, **kwargs: Any) -> Optional[List[Frame]]:
         """Execute this executable SQL object. Passes on its args and kwargs to Executable._compile_sql()."""
         statement, bindparams = self._compile_sql(*args, **kwargs)
-        cursor = self.sql.session.execute(statement, bindparams).cursor
-        if cursor is None:
+
+        if (cursor := self.sql.session.execute(statement, bindparams).cursor) is None:
             return None
         else:
             self.results.append(self._get_frames_from_cursor(cursor))
@@ -102,32 +102,6 @@ class Script(Executable):
 
     def _compile_sql(self, *args: Any, **kwargs: Any) -> Tuple[str, Dict[str, Any]]:
         return self.file.content, {}
-
-
-class TempManager:
-    """Context manager class for implementing temptables without using actual temptables (which sqlalchemy doesn't seem to be able to reflect)"""
-
-    def __init__(self, sql: Sql = None) -> None:
-        self.sql, self._table, self.name = sql, None, "__tmp__"
-
-    def __enter__(self) -> TempManager:
-        self.sql.refresh()
-        if self.name in self.sql.meta.tables:
-            self.sql.drop_table(self.name)
-        return self
-
-    def __exit__(self, exception_type: Any, exception_value: Any, traceback: Any) -> None:
-        self.sql.refresh()
-        if self.name in self.sql.meta.tables:
-            self.sql.drop_table(self.name)
-
-    def __str__(self) -> str:
-        return self.name
-
-    def __call__(self) -> alch.Table:
-        if self._table is None:
-            self._table = self.sql[self.name]
-        return self._table
 
 
 def literal_statement(statement: Any, format_statement: bool = True) -> str:

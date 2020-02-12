@@ -46,8 +46,7 @@ class Sql:
         Config, Frame = Config, Frame
 
     class Settings:
-        cache_metadata = reflect_tables = reflect_views = True
-        eager_reflection = False
+        cache_metadata = reflect_tables = reflect_views = eager_reflection = True
         lazy_schemas = {"information_schema"}
 
     def __init__(self, connection: str = None, database: str = None, log: File = None, autocommit: bool = False) -> None:
@@ -234,8 +233,7 @@ class Sql:
 
         def sqlalchemy_dtype_from_series(series: pd.code.series.Series) -> Any:
             if series.dtype.name in ["int64", "Int64"]:
-                nums = [num for num in series if not isnull(num)]
-                if not nums:
+                if not (nums := [num for num in series if not isnull(num)]):
                     return alch.types.Integer
                 else:
                     minimum, maximum = min(nums), max(nums)
