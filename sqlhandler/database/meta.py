@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
-import copy
 
 import sqlalchemy as alch
-from sqlalchemy.util import immutabledict
 
 from sqlhandler.database.name import SchemaName
 
@@ -14,7 +12,7 @@ if TYPE_CHECKING:
 
 class Metadata(alch.MetaData):
     def __init__(self, sql: Sql = None, **kwargs: Any) -> None:
-        super().__init__()
+        super().__init__(**kwargs)
         self.sql = sql
 
     def __repr__(self) -> str:
