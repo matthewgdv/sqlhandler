@@ -142,8 +142,7 @@ class Database:
         for accessor, names in [(self.tables, self._tables), (self.views, self._views)]:
             schema_accessor = accessor[schema.name]
             for name in names.get(schema, set()):
-                if name not in schema_accessor:
-                    schema_accessor[name.stem] = ObjectProxy(name=name, parent=schema_accessor, database=self)
+                schema_accessor[name.stem] = ObjectProxy(name=name, parent=schema_accessor, database=self)
 
     def _reflect_database(self):
         for schema in PercentagePrinter(sorted(self._schemas, key=lambda name: name.name), formatter=lambda name: f"Reflecting schema: {name.name}"):
