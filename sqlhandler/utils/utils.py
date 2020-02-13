@@ -3,7 +3,6 @@ from __future__ import annotations
 from typing import Any, List, Callable, TypeVar, TYPE_CHECKING, Dict, Tuple, Optional
 from abc import ABC, abstractmethod
 
-import sqlalchemy as alch
 from sqlalchemy.orm import Query
 import sqlparse
 

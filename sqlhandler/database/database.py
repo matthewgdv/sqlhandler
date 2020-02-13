@@ -31,8 +31,8 @@ class Database:
         self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=sql.config.folder.new_file("sql_cache", "pkl"), days=5)
         self.meta = self._get_metadata()
 
-        self.model = cast(Model, declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.constructors.Model, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.Model.__name__, class_registry=self._null_registry))
-        self.auto_model = cast(AutoModel, declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.constructors.AutoModel, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.AutoModel.__name__, class_registry=self._null_registry))
+        self.model = cast(Model, declarative_base(metadata=self.meta, cls=self.sql.constructors.Model, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.Model.__name__, class_registry=self._null_registry))
+        self.auto_model = cast(AutoModel, declarative_base(metadata=self.meta, cls=self.sql.constructors.AutoModel, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.AutoModel.__name__, class_registry=self._null_registry))
 
         self.tables, self.views = Schemas(database=self), Schemas(database=self)
         self._sync_with_db()
@@ -50,7 +50,7 @@ class Database:
             return name
         else:
             name, = alch.inspect(self.sql.engine).get_schema_names() or [None]
-            return name.name
+            return name
 
     def schema_names(self) -> Set[SchemaName]:
         return {SchemaName(name=name, default=self.default_schema) for name in alch.inspect(self.sql.engine).get_schema_names()}
@@ -114,7 +114,7 @@ class Database:
         self._reset_accessors()
         self._prepare_accessors()
 
-        if not self.meta and self.sql.settings.eager_reflection:
+        if not self.meta.tables and self.sql.settings.eager_reflection:
             self._reflect_database()
             self._cache_metadata()
         else:

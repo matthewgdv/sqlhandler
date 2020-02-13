@@ -31,7 +31,7 @@ class Table(alch.Table):
             return alch.Table.__new__(*args, **kwargs)
 
         _, name, meta, *_ = args
-        if kwargs.get("is_declarative", False):
+        if kwargs.pop("is_declarative", False):
             if (schema := kwargs.get("schema")) is None:
                 schema = meta.schema
 
@@ -49,6 +49,9 @@ class ModelMeta(DeclarativeMeta):
     metadata: Metadata
 
     def __new__(mcs, name: str, bases: tuple, namespace: dict) -> ModelMeta:
+        if name == "BaseModel" and not bases:
+            return type(name, bases, namespace)
+
         abs_ns = absolute_namespace(bases=bases, namespace=namespace)
 
         if relationships := {key: val for key, val in abs_ns.items() if isinstance(val, Relationship)}:
@@ -71,7 +74,7 @@ class ModelMeta(DeclarativeMeta):
     @property
     def query(cls: ModelMeta) -> Query:
         """Create a new Query operating on this class."""
-        return cls.metadata.bind.sql.session.query(cls)
+        return cls.metadata.sql.session.query(cls)
 
     @property
     def create(cls: ModelMeta) -> CreateTableAccessor:
@@ -92,7 +95,7 @@ class ModelMeta(DeclarativeMeta):
         cls.metadata.sql.database.drop_table(cls)
 
 
-class BaseModel:
+class BaseModel(metaclass=ModelMeta):
     """Custom base class for declarative and automap bases to inherit from. Represents a mapped table in a sql database."""
     __table__: Table
     metadata: Metadata

@@ -18,9 +18,6 @@ class Metadata(alch.MetaData):
     def __repr__(self) -> str:
         return f"{type(self).__name__}(tables={len(self.tables)})"
 
-    def __bool__(self) -> bool:
-        return bool(self.tables)
-
     def schema_subset(self, schema: SchemaName) -> Metadata:
         meta = type(self)(sql=self.sql, bind=self.sql.engine)
         meta.tables = type(self.tables)({name: table for name, table in self.tables.items() if table.schema == schema})

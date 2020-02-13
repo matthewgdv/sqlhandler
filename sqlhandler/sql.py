@@ -14,7 +14,7 @@ from sqlalchemy.engine.default import DefaultDialect
 from sqlalchemy.dialects import mssql
 
 from subtypes import Frame, Enum
-from pathmagic import File
+from pathmagic import File, PathLike
 from miscutils import cached_property
 from iotools.misc.serializer import LostObject
 
@@ -127,9 +127,9 @@ class Sql:
     def log(self, val: File) -> None:
         self._log = SqlLog(path=val)
 
-    def initialize_log(self, logname: str, logdir: str = None) -> SqlLog:
+    def initialize_log(self, name: str, location: PathLike = None) -> SqlLog:
         """Instantiates a matt.log.SqlLog object from a name and a dirpath, and binds it to this object's 'log' attribute. If 'active' argument is 'False', this method does nothing."""
-        self._log = SqlLog.from_details(log_name=logname, log_dir=logdir, active=False)
+        self._log = SqlLog.from_details(log_name=name, log_dir=location, active=False)
         return self._log
 
     # Conversion Methods
