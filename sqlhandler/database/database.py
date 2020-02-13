@@ -152,7 +152,7 @@ class Database:
 
     def _reflect_schema(self, schema: SchemaName):
         names = sum([
-            sorted(collection.get(schema, set()), key=lambda name_: name_.name) if condition else set()
+            sorted(collection.get(schema, set()), key=lambda name_: name_.name) if condition else []
             for condition, collection in [(self.sql.settings.reflect_tables, self._tables), (self.sql.settings.reflect_views, self._views)]
         ], [])
 

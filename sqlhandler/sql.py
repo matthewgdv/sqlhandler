@@ -46,7 +46,8 @@ class Sql:
         Config, Frame = Config, Frame
 
     class Settings:
-        cache_metadata = reflect_tables = reflect_views = eager_reflection = False
+        cache_metadata = reflect_tables = reflect_views = True
+        eager_reflection = False
         lazy_schemas = {"information_schema"}
 
     def __init__(self, connection: str = None, database: str = None, log: File = None, autocommit: bool = False) -> None:
