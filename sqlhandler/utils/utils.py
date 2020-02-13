@@ -35,7 +35,7 @@ class SqlBoundMixin:
 class Executable(SqlBoundMixin, ABC):
     """An abstract class representing a SQL executable such. Concrete implementations such as scripts or stored procedures must inherit from this. An implementaion of Executable._compile_sql() must be provided."""
 
-    def __init__(self, sql: Sql = None) -> None:
+    def __init__(self, sql: Sql = None, verbose: bool = False) -> None:
         self.sql = sql
         self.results: List[List[Frame]] = []
 
@@ -45,6 +45,7 @@ class Executable(SqlBoundMixin, ABC):
     def execute(self, *args: Any, **kwargs: Any) -> Optional[List[Frame]]:
         """Execute this executable SQL object. Passes on its args and kwargs to Executable._compile_sql()."""
         statement, bindparams = self._compile_sql(*args, **kwargs)
+        self.sql.log.write_sql(f"{statement}\n\nPARAMS:\n\n{bindparams}" if bindparams else statement)
 
         if (cursor := self.sql.session.execute(statement, bindparams).cursor) is None:
             return None
@@ -74,17 +75,17 @@ class Executable(SqlBoundMixin, ABC):
 class StoredProcedure(Executable):
     """A class representing a stored procedure in the database. Can be called to execute the proc. Arguments and keyword arguements will be passed on."""
 
-    def __init__(self, name: str, schema: str = "dbo", database: str = None, sql: Sql = None) -> None:
+    def __init__(self, name: str, schema: str = None, database: str = None, sql: Sql = None) -> None:
         super().__init__(sql=sql)
-        self.name, self.schema, self.database = name, schema, database
+        self.name, self.schema, self.database = name, schema or self.sql.database.default_schema, database
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name={self.name}, schema={self.schema})"
 
     def _compile_sql(self, *args: Any, **kwargs: Any) -> Tuple[str, Dict[str, Any]]:
         mappings = {
-            **{f"boundarg{index + 1}": {"bind": f":boundarg{index + 1}", "val": val} for index, val in enumerate(args)},
-            **{f"boundkwarg{index + 1}": {"bind": f"@{name}=:boundkwarg{index + 1}", "val": val} for index, (name, val) in enumerate(kwargs.items())}
+            **{f"arg{index + 1}": {"bind": f":arg{index + 1}", "val": val} for index, val in enumerate(args)},
+            **{f"kwarg{index + 1}": {"bind": f"@{name}=:kwarg{index + 1}", "val": val} for index, (name, val) in enumerate(kwargs.items())}
         }
         proc_name = f"EXEC {f'[{self.database}].' if self.database is not None else ''}[{self.schema}].[{self.name}]"
         return f"{proc_name} {', '.join([arg['bind'] for arg in mappings.values()])}", {name: arg["val"] for name, arg in mappings.items()}

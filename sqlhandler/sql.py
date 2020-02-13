@@ -125,7 +125,7 @@ class Sql:
 
     @log.setter
     def log(self, val: File) -> None:
-        self._log = SqlLog(path=val, active=False)
+        self._log = SqlLog(path=val)
 
     def initialize_log(self, logname: str, logdir: str = None) -> SqlLog:
         """Instantiates a matt.log.SqlLog object from a name and a dirpath, and binds it to this object's 'log' attribute. If 'active' argument is 'False', this method does nothing."""

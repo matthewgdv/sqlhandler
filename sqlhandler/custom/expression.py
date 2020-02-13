@@ -38,20 +38,20 @@ class ExpressionMixin:
 
     def _prepare_tran(self) -> None:
         self.sql.session.rollback()
-        self.sql.log.write(f"{'-' * 200}\n\nBEGIN TRAN;", add_newlines=2)
+        self.sql.log.write_sql(f"{'-' * 200}\n\nBEGIN TRAN;", add_newlines=2)
 
     def _resolve_tran(self, force_commit: bool = False) -> None:
         if self.sql.autocommit or force_commit:
             self.sql.session.commit()
-            self.sql.log.write("COMMIT;", add_newlines=2)
+            self.sql.log.write_sql("COMMIT;", add_newlines=2)
         else:
             user_confirmation = input("\nIf you are happy with the above Query/Queries please type COMMIT. Anything else will roll back the ongoing Transaction.\n\n")
             if user_confirmation.upper() == "COMMIT":
                 self.sql.session.commit()
-                self.sql.log.write("COMMIT;", add_newlines=2)
+                self.sql.log.write_sql("COMMIT;", add_newlines=2)
             else:
                 self.sql.session.rollback()
-                self.sql.log.write("ROLLBACK;", add_newlines=2)
+                self.sql.log.write_sql("ROLLBACK;", add_newlines=2)
 
     def _perform_pre_select(self, silently: bool) -> Optional[Select]:
         if silently:
@@ -74,7 +74,7 @@ class ExpressionMixin:
 
     def _execute_expression_and_determine_rowcount(self, rowcount: int = None) -> int:
         result = self.sql.session.execute(self)
-        self.sql.log.write(str(self), add_newlines=2)
+        self.sql.log.write_sql(str(self), add_newlines=2)
 
         if rowcount is None:
             rowcount = result.rowcount
@@ -117,7 +117,7 @@ class Select(alch.sql.Select):
     def resolve(self) -> Frame:
         """Convert this query into a subtypes.Frame and write an ascii representation of it to the log, then return it."""
         frame = self._select_to_frame()
-        self.bind.sql.log.write(str(self), add_newlines=2)
+        self.bind.sql.log.write_sql(str(self), add_newlines=2)
         self.bind.sql.log.write_comment(frame.applymap(lambda val: 1 if val is True else (0 if val is False else ("NULL" if val is None else val))).to_ascii(), add_newlines=2)
         return frame
 

@@ -8,25 +8,21 @@ from iotools import PrintLog
 class SqlLog(PrintLog):
     """A logger designed to leave behind properly formatted SQL scripts from any SQL statements executed using the '.resolve()' method of the custom expression classes."""
 
-    def __enter__(self, *args, **kwargs) -> PrintLog:
-        if self._path is not None:
-            self.activate()
-            return self
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
+        super().__init__(*args, **kwargs)
+        self.to_file = False
 
-    def __exit__(self, ex_type: Any, ex_value: Any, ex_traceback: Any) -> None:
-        self.deactivate()
+    def write_sql(self, text: str, add_newlines: int = 2) -> None:
+        if not self.active or self.to_stream:
+            self.write(text=text, to_stream=True, to_file=False, add_newlines=add_newlines)
 
-    def deactivate(self, openfile: bool = True) -> None:
-        """Deactivate this log and optionally open the log file."""
-        if self.active:
-            super().deactivate()
-            if openfile:
-                self.start()
+        if self.active and self.to_file:
+            self.write(text=text, to_stream=False, to_file=True, add_newlines=add_newlines)
 
     def write_comment(self, text: str, single_line_comment_cutoff: int = 5, add_newlines: int = 2) -> None:
         """Write a SQL comment to the log in either short or long-form depending on the 'single_line_comment_cutoff'."""
-        if not self.active or self.to_console:
-            super().write(text=text, to_console=True, to_file=False, add_newlines=add_newlines)
+        if not self.active or self.to_stream:
+            self.write(text=text, to_stream=True, to_file=False, add_newlines=add_newlines)
 
         if self.active and self.to_file:
             if text.strip().count("\n") <= single_line_comment_cutoff:
@@ -34,7 +30,7 @@ class SqlLog(PrintLog):
             else:
                 text = "/*\n" + text.strip() + "\n*/"
 
-            super().write(text=text, to_console=False, to_file=True, add_newlines=add_newlines)
+            self.write(text=text, to_stream=False, to_file=True, add_newlines=add_newlines)
 
     @classmethod
     def from_details(cls, log_name: str, log_dir: str = None, active: bool = True, file_extension: str = "sql") -> SqlLog:
