@@ -11,7 +11,7 @@ if TYPE_CHECKING:
     from .sql import DjangoSql
 
 
-class SqlModel(SqlConfig.Sql.constructors.Model, SqlConfig.settings.MODEL_MIXIN):
+class SqlModel(SqlConfig.Sql.Constructors.Model, SqlConfig.settings.MODEL_MIXIN):
     @classmethod
     def django(cls) -> Type[DjangoModel]:
         return SqlConfig.sql.database.django_mappings[cls.__table__.name]

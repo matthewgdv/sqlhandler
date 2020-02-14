@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from typing import TYPE_CHECKING
 
 from django.apps import AppConfig
@@ -38,6 +40,10 @@ class SqlConfig(AppConfig):
     )
 
     def ready(self) -> None:
+        if os.environ.get("RUN_MAIN", None) != "true":
+            self.setup()
+
+    def setup(self) -> None:
         from .sql import DjangoSql
         import sqlhandler.django as root
 

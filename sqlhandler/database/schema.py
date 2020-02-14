@@ -30,6 +30,9 @@ class Schemas(NameSpace):
         return self
 
     def __getattr__(self, attr: str) -> Schema:
+        if attr == "__none__":
+            return self[self._database.default_schema]
+
         if not attr.startswith("_"):
             self._database._prepare_schema_accessors()
 

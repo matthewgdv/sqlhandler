@@ -14,9 +14,12 @@ from sqlhandler.utils import Url
 
 
 class DjangoSql(SqlConfig.Sql):
-    CACHE_METADATA = False
-    constructors = SqlConfig.Sql.Constructors()
-    constructors.Model, constructors.Database = SqlModel, DjangoDatabase
+    class Settings(SqlConfig.Sql.Settings):
+        eager_reflection = True
+        cache_metadata = True
+
+    class Constructors(SqlConfig.Sql.Constructors):
+        Model, Database = SqlModel, DjangoDatabase
 
     @property
     def django(self) -> DjangoApps:
