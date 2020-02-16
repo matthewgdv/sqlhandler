@@ -15,8 +15,8 @@ from sqlhandler.utils import Url
 
 class DjangoSql(SqlConfig.Sql):
     class Settings(SqlConfig.Sql.Settings):
-        eager_reflection = True
-        cache_metadata = True
+        eager_reflection = cache_metadata = True
+        reflect_views = False
 
     class Constructors(SqlConfig.Sql.Constructors):
         Model, Database = SqlModel, DjangoDatabase

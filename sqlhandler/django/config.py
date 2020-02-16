@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import warnings
 
 from typing import TYPE_CHECKING
 
@@ -40,15 +41,24 @@ class SqlConfig(AppConfig):
     )
 
     def ready(self) -> None:
-        if os.environ.get("RUN_MAIN", None) != "true":
+        if os.environ.get("RUN_MAIN", None) == "true":
             self.setup()
 
     def setup(self) -> None:
-        from .sql import DjangoSql
         import sqlhandler.django as root
 
         self.settings.update(getattr(settings, "SQLHANDLER_SETTINGS", {}))
         for connection in db.connections.databases:
-            self.connections[connection] = DjangoSql(connection)
+            self.connections[connection] = self.initialize_database(connection=connection)
 
         type(self).sql = root.sql = self.connections.default or None
+
+    def initialize_database(self, connection: str):
+        from .sql import DjangoSql
+
+        try:
+            return DjangoSql(connection=connection)
+        except Exception as ex:
+            import traceback
+            print(f"The following exception caused sqlhandler.django to fail to start but was suppressed:\n\n{traceback.format_exc()}")
+            return None
