@@ -19,7 +19,7 @@ class DjangoSql(SqlConfig.Sql):
         reflect_views = False
 
     class Constructors(SqlConfig.Sql.Constructors):
-        Model, Database = SqlModel, DjangoDatabase
+        ReflectedModel, Database = SqlModel, DjangoDatabase
 
     @property
     def django(self) -> DjangoApps:

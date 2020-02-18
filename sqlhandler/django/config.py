@@ -41,8 +41,7 @@ class SqlConfig(AppConfig):
     )
 
     def ready(self) -> None:
-        if os.environ.get("RUN_MAIN", None) == "true":
-            self.setup()
+        self.setup()
 
     def setup(self) -> None:
         import sqlhandler.django as root
