@@ -31,10 +31,10 @@ class SubtypesDate(types.TypeDecorator):
     string = types.String()
 
     def process_bind_param(self, value, dialect):
-        return None if value is None else Date.from_datelike(value).to_isoformat(time=False)
+        return None if value is None else Date.from_datelike(value).to_isoformat()
 
     def process_literal_param(self, value, dialect):
-        return None if value is None else self.string.literal_processor(dialect)(Date.from_datelike(value).to_isoformat(time=False))
+        return None if value is None else self.string.literal_processor(dialect)(Date.from_datelike(value).to_isoformat())
 
     def process_result_value(self, value, dialect):
         return None if value is None else Date.from_datelike(value)
