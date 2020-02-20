@@ -44,7 +44,13 @@ class Executable(SqlBoundMixin, ABC):
     def execute(self, *args: Any, **kwargs: Any) -> Optional[List[Frame]]:
         """Execute this executable SQL object. Passes on its args and kwargs to Executable._compile_sql()."""
         statement, bindparams = self._compile_sql(*args, **kwargs)
-        self.sql.log.write_sql(f"{statement}\n\nPARAMS:\n\n{bindparams}" if bindparams else statement)
+        bound = statement
+
+        if bindparams:
+            for key, val in bindparams.items():
+                bound = bound.replace(f":{key}", repr(val))
+
+        self.sql.log.write_sql(bound)
 
         if (cursor := self.sql.session.execute(statement, bindparams).cursor) is None:
             return None
