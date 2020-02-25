@@ -181,8 +181,7 @@ class Sql:
 
         dataframe.to_sql(engine=self.engine, name=table, if_exists=if_exists, index=False, primary_key=primary_key, schema=schema, dtype=dtypes)
 
-        model = self.tables[schema][table]()
-        self.database.refresh_table(table=model.__table__)
+        self.database._sync_with_db()
         return self.tables[schema][table]()
 
     def orm_to_frame(self, orm_objects: Any) -> Frame:
