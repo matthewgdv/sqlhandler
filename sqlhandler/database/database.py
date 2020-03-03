@@ -38,7 +38,7 @@ class Database:
         self._sync_with_db()
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(name={repr(self.name)}, tables={repr(self.tables)}, views={repr(self.views)}, cache={repr(self.cache)})"
+        return f"{type(self).__name__}(name={repr(self.name)}, schemas={len(self._schemas)}, tables={len(self._tables)}, views={len(self._views)})"
 
     def __call__(self) -> Database:
         self._reflect_database()
