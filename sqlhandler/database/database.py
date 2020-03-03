@@ -191,6 +191,8 @@ class Database:
         self.tables[schema.name]._base = self.views[schema.name]._base = automap
         self.tables[schema.name]._registry = self.views[schema.name]._registry = registry
 
+        self._cache_metadata()
+
     def _remove_expired_metadata_objects(self):
         all_objects = self._tables.all_objects() | self._views.all_objects()
         for item in list(self.meta.tables.values()):
