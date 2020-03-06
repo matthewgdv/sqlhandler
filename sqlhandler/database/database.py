@@ -1,21 +1,23 @@
 from __future__ import annotations
 
 import warnings
+from contextlib import contextmanager
 from typing import Any, Union, Set, Callable, TYPE_CHECKING, cast, Type
 
 import sqlalchemy as alch
-from sqlalchemy import Column, Integer
+from sqlalchemy import Column, Integer, event
 from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.ext.declarative import declarative_base
 
 from maybe import Maybe
-from subtypes import Str
+from subtypes import Str, Dict_
 from miscutils import cached_property, PercentagePrinter, Printer
 from iotools import Cache
 
 from .meta import NullRegistry, Metadata
-from .name import SchemaName, ObjectName, SchemaShape, ViewName, TableName
-from .schema import Schemas, ObjectProxy
+from .name import SchemaName, ObjectName, ViewName, TableName
+from .shape import DatabaseShape
+from .schema import Schemas, TableSchemas, ViewSchemas, SchemaRouter
 
 from sqlhandler.custom import Model, AutoModel, Table
 
@@ -28,17 +30,20 @@ class Database:
     _null_registry = NullRegistry()
 
     def __init__(self, sql: Sql) -> None:
-        self.sql, self.name, self.cache = sql, sql.engine.url.database, Cache(file=sql.config.folder.new_file("sql_cache", "pkl"), days=5)
+        self.sql, self.name, self.cache, self._post_reshape_countdown = sql, sql.engine.url.database, Cache(file=sql.config.folder.new_file("sql_cache", "pkl"), days=5), 0
         self.meta = self._get_metadata()
 
-        self.model = cast(Model, declarative_base(metadata=self.meta, cls=self.sql.constructors.Model, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.Model.__name__, class_registry=self._null_registry))
-        self.auto_model = cast(AutoModel, declarative_base(metadata=self.meta, cls=self.sql.constructors.AutoModel, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.AutoModel.__name__, class_registry=self._null_registry))
+        self.model = cast(Type[Model], declarative_base(metadata=self.meta, cls=self.sql.constructors.Model, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.Model.__name__, class_registry=self._null_registry))
+        self.auto_model = cast(Type[AutoModel], declarative_base(metadata=self.meta, cls=self.sql.constructors.AutoModel, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.AutoModel.__name__, class_registry=self._null_registry))
 
-        self.tables, self.views = Schemas(database=self), Schemas(database=self)
+        self.shape = DatabaseShape(database=self)
+        self.objects, self.tables, self.views = Schemas(database=self), TableSchemas(database=self), ViewSchemas(database=self)
+        self.router = SchemaRouter(database=self).register_all([self.objects, self.tables, self.views])
+
         self._sync_with_db()
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}(name={repr(self.name)}, schemas={len(self._schemas)}, tables={len(self._tables)}, views={len(self._views)})"
+        return f"{type(self).__name__}(name={repr(self.name)}, schemas={len(self.shape.schemas)}, tables={len(self.meta.tables)})"
 
     def __call__(self) -> Database:
         self._reflect_database()
@@ -66,7 +71,7 @@ class Database:
         table = self._normalize_table(table)
         table.create()
         self._sync_with_db()
-        self._reflect_object_with_autoload(self._name_from_object(table, object_type=TableName))
+        self._reflect_object(self._name_from_object(table, object_type=TableName))
 
     def drop_table(self, table: Table) -> None:
         """Emit a drop table statement to the database for the given table object."""
@@ -78,7 +83,7 @@ class Database:
         """Reflect the given table object again."""
         table = self._normalize_table(table)
         self._sync_with_db()
-        self._reflect_object_with_autoload(self._name_from_object(table, object_type=TableName))
+        self._reflect_object(self._name_from_object(table, object_type=TableName))
 
     def exists_table(self, table: Table) -> bool:
         table = self._normalize_table(table)
@@ -109,116 +114,80 @@ class Database:
         if self.sql.settings.cache_metadata:
             self.cache[self.name] = self.meta
 
-    def _sync_with_db(self) -> None:
-        self._determine_shape()
-        self._reset_accessors()
-        self._prepare_accessors()
+    @contextmanager
+    def _post_reshape_soon(self) -> None:
+        self._post_reshape_countdown += 1
+        yield
+        self._post_reshape_countdown -= 1
 
-        if not self.meta.tables and self.sql.settings.eager_reflection:
-            self._reflect_database()
+        if not self._post_reshape_countdown:
             self._cache_metadata()
-        else:
-            self._autoload_database()
+            self._autoload_models()
 
-        self._remove_expired_metadata_objects()
+    def _sync_with_db(self) -> None:
+        with self._post_reshape_soon():
+            self.shape.refresh()
+            self.router.refresh_accessors()
 
-    def _determine_shape(self) -> None:
-        self._schemas = self.schema_names()
-        self._tables = SchemaShape({schema: {name for name in self.table_names(schema=schema)} for schema in self._schemas})
-        self._views = SchemaShape({schema: {name for name in self.view_names(schema=schema)} for schema in self._schemas})
+            if not self.meta.tables and self.sql.settings.eager_reflection:
+                self._reflect_database()
 
-    def _prepare_accessors(self) -> None:
-        self._prepare_schema_accessors()
-        for schema in self._schemas:
-            self._prepare_object_accessors(schema=schema)
-
-    def _prepare_schema_accessors(self) -> None:
-        for accessor in (self.tables, self.views):
-            for schema in self._schemas:
-                if schema not in accessor:
-                    accessor[schema.name] = self.sql.constructors.Schema(parent=accessor, name=schema)
-
-    def _prepare_object_accessors(self, schema: SchemaName) -> None:
-        for accessor, names in [(self.tables, self._tables), (self.views, self._views)]:
-            schema_accessor = accessor[schema.name]
-            for name in names.get(schema, set()):
-                schema_accessor[name.stem] = ObjectProxy(name=name, parent=schema_accessor, database=self)
+            self._remove_expired_metadata_objects()
 
     def _reflect_database(self):
-        for schema in PercentagePrinter(sorted(self._schemas, key=lambda name: name.name), formatter=lambda name: f"Reflecting schema: {name.name}"):
-            if schema.name not in self.sql.settings.lazy_schemas:
-                with Printer.from_indentation():
-                    self._reflect_schema(schema=schema)
+        with self._post_reshape_soon():
+            for schema in PercentagePrinter(sorted(self.shape.schemas, key=lambda name: name.name), formatter=lambda name: f"Reflecting schema: {name.name}"):
+                if schema.name not in self.sql.settings.lazy_schemas:
+                    with Printer.from_indentation():
+                        self._reflect_schema(schema=schema)
 
     def _reflect_schema(self, schema: SchemaName):
-        names = sum([
-            sorted(collection.get(schema, set()), key=lambda name_: name_.name) if condition else []
-            for condition, collection in [(self.sql.settings.reflect_tables, self._tables), (self.sql.settings.reflect_views, self._views)]
-        ], [])
+        with self._post_reshape_soon():
+            schema_shape = self.shape[schema]
+            names = sum([
+                sorted(collection, key=lambda name_: name_.name) if condition else []
+                for collection, condition in [(schema_shape.tables, self.sql.settings.reflect_tables), (schema_shape.views, self.sql.settings.reflect_views)]
+            ], [])
 
-        for name in PercentagePrinter(names, formatter=lambda name_: f"Reflecting {name_.object_type}: {name_.name}"):
-            self._reflect_object(name=name)
-
-        self._autoload_schema(schema=schema)
-
-    def _reflect_object_with_autoload(self, name: ObjectName) -> None:
-        self._reflect_object(name=name)
-        self._autoload_schema(name.schema)
+            for name in PercentagePrinter(names, formatter=lambda name_: f"Reflecting {name_.object_type}: {name_.name}"):
+                self._reflect_object(name=name)
 
     # noinspection PyArgumentList
     def _reflect_object(self, name: ObjectName) -> Table:
-        if not (table := Table(name.stem, self.meta, schema=name.schema.name, autoload=True)).primary_key:
-            table = Table(name.stem, self.meta, Column("__pk__", Integer, primary_key=True), schema=name.schema.name, autoload=True, extend_existing=True)
+        with self._post_reshape_soon():
+            if not (table := Table(name.stem, self.meta, schema=name.schema.name, autoload=True)).primary_key:
+                table = Table(name.stem, self.meta, Column("__pk__", Integer, primary_key=True), schema=name.schema.name, autoload=True, extend_existing=True)
 
-        return table
+            return table
 
-    def _autoload_database(self) -> None:
-        for schema in self._schemas:
-            self._autoload_schema(schema)
+    def _autoload_models(self) -> None:
+        reflected_model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.constructors.ReflectedModel, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.ReflectedModel.__name__, class_registry=(registry := {}))
+        automap = automap_base(declarative_base=reflected_model)
+        automap.classes = Dict_()
 
-    def _autoload_schema(self, schema: SchemaName) -> None:
-        model = declarative_base(bind=self.sql.engine,
-                                 metadata=self.meta.schema_subset(schema),
-                                 cls=self.sql.constructors.ReflectedModel,
-                                 metaclass=self.sql.constructors.ModelMeta,
-                                 name=self.sql.constructors.ReflectedModel.__name__,
-                                 class_registry=(registry := {}))
+        @event.listens_for(automap, "class_instrument", propagate=True)
+        def cls_instrument(cls):
+            schema = schema if (schema := (table := cls.__table__).schema) is not None else cls.metadata.sql.database.default_schema
+            automap.classes.setdefault_lazy(key=schema, factory=Dict_)[table.name] = cls
 
-        automap = automap_base(declarative_base=model)
         automap.prepare(classname_for_table=self._table_name(), name_for_scalar_relationship=self._scalar_name(), name_for_collection_relationship=self._collection_name())
-        automap.metadata = self.meta
 
-        self.tables[schema.name]._base = self.views[schema.name]._base = automap
-        self.tables[schema.name]._registry = self.views[schema.name]._registry = registry
-
-        self._cache_metadata()
+        for key, val in automap.classes.items():
+            if isinstance(val, Dict_):
+                self.shape.schemas[key].registry.update(val)
 
     def _remove_expired_metadata_objects(self):
-        all_objects = self._tables.all_objects() | self._views.all_objects()
-        for item in list(self.meta.tables.values()):
-            if self._name_from_object(item) not in all_objects:
-                self._remove_object_if_exists(item)
+        with self._post_reshape_soon():
+            for item in list(self.meta.tables.values()):
+                if self._name_from_object(item) not in self.shape.all_objects:
+                    self._remove_object_if_exists(item)
 
     def _remove_object_if_exists(self, table: Table) -> None:
         if table in self.meta:
-            self._remove_object_from_metadata(table=table)
+            with self._post_reshape_soon():
+                self.meta.remove(table)
 
-        self._remove_object_from_accessors(name=self._name_from_object(table=table))
-
-    def _remove_object_from_metadata(self, table: Table) -> None:
-        self.meta.remove(table)
-        self._cache_metadata()
-
-    def _remove_object_from_accessors(self, name: ObjectName) -> None:
-        for accessor in (self.tables, self.views):
-            (schema_accessor := accessor[name.schema.name])._registry.pop(name.stem, None)
-            if name.stem in schema_accessor:
-                del schema_accessor[name.stem]
-
-    def _reset_accessors(self) -> None:
-        for accessor in (self.tables, self.views):
-            for schema, _ in accessor:
-                del accessor[schema]
+        self.router.remove_object_if_exists(name=self._name_from_object(table=table, object_type=TableName))
 
     def _name_from_object(self, table: Table, object_type: Type[ObjectName] = ObjectName) -> ObjectName:
         return object_type(stem=table.name, schema=SchemaName(table.schema, default=self.default_schema))

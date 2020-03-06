@@ -1,12 +1,11 @@
 from __future__ import annotations
 
-from typing import Any, Union, Dict, TYPE_CHECKING
+from typing import Any, Union, Dict, TYPE_CHECKING, Type, cast
 
 import sqlalchemy as alch
 from sqlalchemy import Column, true, null, func
-from sqlalchemy import types
+from sqlalchemy import types, event
 from sqlalchemy.sql.base import ImmutableColumnCollection
-from sqlalchemy.sql.schema import _get_table_key
 from sqlalchemy.orm import backref
 from sqlalchemy.orm.attributes import InstrumentedAttribute
 from sqlalchemy.orm.util import AliasedClass
@@ -20,25 +19,10 @@ from .field import SubtypesDateTime
 from .misc import absolute_namespace, CreateTableAccessor
 from .relationship import Relationship
 from .query import Query
+from .table import Table
 
 if TYPE_CHECKING:
     from sqlhandler.database import Metadata
-
-
-class Table(alch.Table):
-    def __new__(*args: Any, **kwargs: Any) -> Table:
-        if len(args) == 1:
-            return alch.Table.__new__(*args, **kwargs)
-
-        _, name, meta, *_ = args
-        if kwargs.pop("is_declarative", False):
-            if (schema := kwargs.get("schema")) is None:
-                schema = meta.schema
-
-            if (table := meta.tables.get(_get_table_key(name, schema))) is not None:
-                meta.remove(table)
-
-        return alch.Table.__new__(*args, **kwargs)
 
 
 class ModelMeta(DeclarativeMeta):
@@ -55,17 +39,12 @@ class ModelMeta(DeclarativeMeta):
         abs_ns = absolute_namespace(bases=bases, namespace=namespace)
 
         if relationships := {key: val for key, val in abs_ns.items() if isinstance(val, Relationship)}:
-            table_name = name
-
-            try:
-                table_name = type(name, (), abs_ns).__tablename__
-            except AttributeError:
-                pass
-
+            table_name = type(name, (), abs_ns).__tablename__
             for attribute, relationship in relationships.items():
                 relationship.build(table_name=table_name, bases=bases, namespace=namespace, attribute=attribute)
 
-        mcs._registry.add(cls := type.__new__(mcs, name, bases, namespace))
+        cls = cast(Type[BaseModel], type.__new__(mcs, name, bases, namespace))
+        cls._registry.add(cls)
         return cls
 
     def __repr__(cls) -> str:
@@ -174,3 +153,12 @@ class AutoModel(Model):
 
 class ReflectedModel(BaseModel):
     pass
+
+
+reserved_colnames = set(dir(ModelMeta))
+
+
+@event.listens_for(Table, "column_reflect")
+def on_column_reflect(inspector, table, column_info):
+    if (key := column_info["name"]) in reserved_colnames:
+        column_info["key"] = f"{key}_"

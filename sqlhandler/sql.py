@@ -19,6 +19,7 @@ from miscutils import cached_property
 from iotools.misc.serializer import LostObject
 
 from sqlhandler.custom import ModelMeta, Model, AutoModel, ReflectedModel, Query, Session, ForeignKey, Relationship, SubtypesDateTime, SubtypesDate, BitLiteral, Select, Update, Insert, Delete, SelectInto
+from sqlhandler.database.schema import TableSchemas, ViewSchemas
 from sqlhandler.utils import StoredProcedure, Script, SqlLog
 from sqlhandler.database import Database, Metadata, Schemas, Schema
 from sqlhandler.utils import Config, Url
@@ -101,13 +102,18 @@ class Sql:
         return self.database.auto_model
 
     @property
-    def tables(self) -> Schemas:
-        """Property controlling access to mapped models. Models will only appear for tables that have a primary key, and never for views. Schemas must be accessed before tables: E.g. Sql().orm.some_schema.some_table"""
+    def objects(self) -> Schemas:
+        """Property controlling access to all database objects."""
+        return self.database.objects
+
+    @property
+    def tables(self) -> TableSchemas:
+        """Property controlling access to mapped tables."""
         return self.database.tables
 
     @property
-    def views(self) -> Schemas:
-        """Property controlling access to raw database objects. Schemas must be accessed before tables: E.g. Sql().orm.some_schema.some_table"""
+    def views(self) -> ViewSchemas:
+        """Property controlling access to mapped views."""
         return self.database.views
 
     @cached_property
@@ -154,7 +160,7 @@ class Sql:
 
     def excel_to_table(self, filepath: os.PathLike, table: str = "temp", schema: str = None, if_exists: Sql.IfExists = IfExists.FAIL, primary_key: str = "id", **kwargs: Any) -> Model:
         """Bulk insert the content of the target '.xlsx' file to the specified table."""
-        return self.frame_to_table(dataframe=Frame.from_excel(filepath, **kwargs), table=table, schema=schema, if_exists=if_exists, primary_key=primary_key)
+        return self.frame_to_table(dataframe=self.constructors.Frame.from_excel(filepath, **kwargs), table=table, schema=schema, if_exists=if_exists, primary_key=primary_key)
 
     def frame_to_table(self, dataframe: pd.DataFrame, table: str, schema: str = None, if_exists: Sql.IfExists = IfExists.FAIL, primary_key: str = "id") -> Model:
         """Bulk insert the content of a pandas DataFrame to the specified table."""

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, Set
+from typing import Optional
 
 
 class ObjectName:
@@ -50,12 +50,3 @@ class SchemaName:
     def __hash__(self) -> int:
         return hash(self.name)
 
-
-class SchemaShape(dict):
-    def all_objects(self) -> Set[ObjectName]:
-        ret = set()
-
-        for names in self.values():
-            ret |= names
-
-        return ret
