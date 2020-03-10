@@ -24,7 +24,7 @@ class BaseSchema(NameSpace):
 
     def __call__(self, mapping: dict = None, / , **kwargs: Any) -> Schema:
         if mapping is None and not kwargs:
-            if not self._registry:
+            if not self._database.shape[self._name].registry:
                 self._database._reflect_schema(self._name)
         else:
             super().__call__(mapping, **kwargs)
