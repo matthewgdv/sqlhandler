@@ -50,6 +50,9 @@ class ModelMeta(DeclarativeMeta):
     def __repr__(cls) -> str:
         return cls.__name__ if cls.__table__ is None else f"{cls.__name__}({', '.join([f'{col.key}={type(col.type).__name__}' for col in cls.__table__.columns])})"
 
+    def __getitem__(cls, item: str) -> InstrumentedAttribute:
+        return getattr(cls, item)
+
     @property
     def query(cls: ModelMeta) -> Query:
         """Create a new Query operating on this class."""
