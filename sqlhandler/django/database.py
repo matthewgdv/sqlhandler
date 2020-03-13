@@ -45,7 +45,7 @@ class DjangoDatabase(SqlConfig.Sql.Constructors.Database):
             schema._ready = True
 
             for name, model in models.items():
-                if (model := self.django._database.tables[None]._registry.get((table_name := model._meta.db_table))) is not None:
+                if (model := self.shape[self.default_schema].registry.get((table_name := model._meta.db_table))) is not None:
                     self.sqlhandler_mappings[table_name] = schema[name] = model
 
     def _scalar_name(self) -> Callable:
