@@ -4,7 +4,7 @@ from typing import Any
 
 from django import db
 
-from subtypes import Dict_
+from subtypes import Dict
 
 from .config import SqlConfig
 from .database import DjangoDatabase, DjangoApps
@@ -26,6 +26,6 @@ class DjangoSql(SqlConfig.Sql):
         return self.database.django
 
     def _create_url(self, connection: str, **kwargs: Any) -> Url:
-        detail = Dict_(db.connections.databases[connection])
+        detail = Dict(db.connections.databases[connection])
         drivername = SqlConfig.settings.ENGINES[detail.ENGINE.rpartition(".")[-1]]
         return Url(drivername=drivername, database=detail.NAME, username=detail.USER or None, password=detail.PASSWORD or None, host=detail.HOST or None, port=detail.PORT or None)

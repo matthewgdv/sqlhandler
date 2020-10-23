@@ -36,12 +36,12 @@ class Executable(SqlBoundMixin, ABC):
 
     def __init__(self, sql: Sql = None, verbose: bool = False) -> None:
         self.sql = sql
-        self.results: List[List[Frame]] = []
+        self.results: list[list[Frame]] = []
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self.execute(*args, **kwargs)
 
-    def execute(self, *args: Any, **kwargs: Any) -> Optional[List[Frame]]:
+    def execute(self, *args: Any, **kwargs: Any) -> Optional[list[Frame]]:
         """Execute this executable SQL object. Passes on its args and kwargs to Executable._compile_sql()."""
         statement, bindparams = self._compile_sql(*args, **kwargs)
         bound = statement
@@ -59,11 +59,11 @@ class Executable(SqlBoundMixin, ABC):
             return self.results[-1]
 
     @abstractmethod
-    def _compile_sql(self, *args: Any, **kwargs: Any) -> Tuple[str, Dict[str, Any]]:
+    def _compile_sql(self, *args: Any, **kwargs: Any) -> Tuple[str, dict[str, Any]]:
         pass
 
     @staticmethod
-    def _get_frames_from_cursor(cursor: Any) -> List[Frame]:
+    def _get_frames_from_cursor(cursor: Any) -> list[Frame]:
         def get_frame_from_cursor(curs: Any) -> Optional[Frame]:
             try:
                 return Frame([tuple(row) for row in curs.fetchall()], columns=[info[0] for info in cursor.description])
@@ -87,7 +87,7 @@ class StoredProcedure(Executable):
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name={self.name}, schema={self.schema})"
 
-    def _compile_sql(self, *args: Any, **kwargs: Any) -> Tuple[str, Dict[str, Any]]:
+    def _compile_sql(self, *args: Any, **kwargs: Any) -> Tuple[str, dict[str, Any]]:
         mappings = {
             **{f"arg{index + 1}": {"bind": f":arg{index + 1}", "val": val} for index, val in enumerate(args)},
             **{f"kwarg{index + 1}": {"bind": f"@{name}=:kwarg{index + 1}", "val": val} for index, (name, val) in enumerate(kwargs.items())}
@@ -106,7 +106,7 @@ class Script(Executable):
     def __repr__(self) -> str:
         return f"{type(self).__name__}(file={self.file})"
 
-    def _compile_sql(self, *args: Any, **kwargs: Any) -> Tuple[str, Dict[str, Any]]:
+    def _compile_sql(self, *args: Any, **kwargs: Any) -> Tuple[str, dict[str, Any]]:
         return self.file.content, {}
 
 

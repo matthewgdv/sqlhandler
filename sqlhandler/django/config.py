@@ -9,7 +9,7 @@ from django.apps import AppConfig
 from django import db
 from django.conf import settings
 
-from subtypes import Dict_
+from subtypes import Dict
 
 from sqlhandler.sql import Sql
 
@@ -23,10 +23,10 @@ class NullOp:
 
 
 class SqlConfig(AppConfig):
-    name, Sql, connections = "sqlhandler", Sql, Dict_()
+    name, Sql, connections = "sqlhandler", Sql, Dict()
     sql: DjangoSql = None
 
-    settings = Dict_(
+    settings = Dict(
         {
             "SCHEMAS": [None],
             "ENGINES": {

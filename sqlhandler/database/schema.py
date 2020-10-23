@@ -127,7 +127,7 @@ class ViewSchemas(BaseSchemas):
 class SchemaRouter:
     def __init__(self, database: Database) -> None:
         self.database = database
-        self.accessors: List[Schemas] = []
+        self.accessors: list[Schemas] = []
 
     def register(self, accessor: Schemas) -> SchemaRouter:
         self.accessors.append(accessor)

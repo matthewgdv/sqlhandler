@@ -6,7 +6,7 @@ from sqlalchemy import Column
 from sqlalchemy import types
 from sqlalchemy.orm import backref, relationship
 
-from subtypes import Str, Dict_, Enum
+from subtypes import Str, Dict, Enum
 
 from .misc import ForeignKey, absolute_namespace
 
@@ -64,7 +64,7 @@ class Relationship:
         self.settings = self.Settings()
 
         self.target, self.kind, self.backref_name, self.association = Relationship._TargetEntity(model=target, rel=self), kind, backref_name, association
-        self.backref_kwargs = Dict_({**self.settings.default_backref_kwargs, **backref_kwargs})
+        self.backref_kwargs = Dict({**self.settings.default_backref_kwargs, **backref_kwargs})
 
         self.this: Optional[Relationship._FutureEntity] = None
         self.attribute: Optional[str] = None

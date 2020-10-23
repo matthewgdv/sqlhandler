@@ -10,7 +10,7 @@ from sqlalchemy.ext.automap import automap_base
 from sqlalchemy.ext.declarative import declarative_base
 
 from maybe import Maybe
-from subtypes import Str, Dict_
+from subtypes import Str, Dict
 from miscutils import cached_property, PercentagePrinter, Printer
 from iotools import Cache
 
@@ -163,17 +163,17 @@ class Database:
     def _autoload_models(self) -> None:
         reflected_model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.constructors.ReflectedModel, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.ReflectedModel.__name__, class_registry=(registry := {}))
         automap = automap_base(declarative_base=reflected_model)
-        automap.classes = Dict_()
+        automap.classes = Dict()
 
         @event.listens_for(automap, "class_instrument", propagate=True)
         def cls_instrument(cls):
             schema = schema if (schema := (table := cls.__table__).schema) is not None else cls.metadata.sql.database.default_schema
-            automap.classes.setdefault_lazy(key=schema, factory=Dict_)[table.name] = cls
+            automap.classes.setdefault_lazy(key=schema, factory=Dict)[table.name] = cls
 
         automap.prepare(classname_for_table=self._table_name(), name_for_scalar_relationship=self._scalar_name(), name_for_collection_relationship=self._collection_name())
 
         for key, val in automap.classes.items():
-            if isinstance(val, Dict_):
+            if isinstance(val, Dict):
                 self.shape.schemas[key].registry.update(val)
 
     def _remove_expired_metadata_objects(self):

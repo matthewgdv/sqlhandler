@@ -91,13 +91,13 @@ class BaseModel(metaclass=ModelMeta):
         self.metadata.sql.session.add(self)
         return self
 
-    def update(self, argdeltas: Dict[Union[str, InstrumentedAttribute], Any] = None, /, **update_kwargs: Any) -> BaseModel:
+    def update(self, argdeltas: dict[Union[str, InstrumentedAttribute], Any] = None, /, **update_kwargs: Any) -> BaseModel:
         """
         Emit an update statement against database record represented by this object in this model's underlying table.
         This method positionally accepts a dict where the keys are the model's class attributes (of type InstrumentedAttribute) and the values are the values to update to.
         Alternatively, if the column names are known they may be set using keyword arguments. Raises AttributeError if invalid keys are provided.
         """
-        updates: Dict[str, Any] = {}
+        updates: dict[str, Any] = {}
 
         clean_argdeltas = {} if argdeltas is None else {(name if isinstance(name, str) else name.key): val for name, val in argdeltas.items()}
         updates.update(clean_argdeltas)
@@ -120,7 +120,7 @@ class BaseModel(metaclass=ModelMeta):
         self.metadata.sql.session.delete(self)
         return self
 
-    def clone(self, argdeltas: Dict[Union[str, InstrumentedAttribute], Any] = None, **update_kwargs: Any) -> BaseModel:
+    def clone(self, argdeltas: dict[Union[str, InstrumentedAttribute], Any] = None, **update_kwargs: Any) -> BaseModel:
         """Create a clone (new primary_key, but copies of all other attributes) of this object in the detached state. Model.insert() will be required to persist it to the database."""
         valid_cols = [col.name for col in self.__table__.columns if col.name not in self.__table__.primary_key.columns]
         return type(self)(**{col: getattr(self, col) for col in valid_cols}).update(argdeltas, **update_kwargs)

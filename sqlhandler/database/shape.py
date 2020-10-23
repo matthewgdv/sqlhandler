@@ -13,7 +13,7 @@ if TYPE_CHECKING:
 class DatabaseShape(ReprMixin):
     def __init__(self, database: Database) -> None:
         self.database = database
-        self.schemas: Dict[SchemaName, SchemaShape] = {name: SchemaShape(name=name, database=self.database) for name in self.database.schema_names()}
+        self.schemas: dict[SchemaName, SchemaShape] = {name: SchemaShape(name=name, database=self.database) for name in self.database.schema_names()}
         self.schema_name_mappings = {name.name: name for name in self.schemas}
 
         self.all_objects = set()

@@ -233,7 +233,7 @@ class Sql:
         return dialect
 
     @staticmethod
-    def _sql_dtype_dict_from_frame(frame: Frame) -> Dict[str, Any]:
+    def _sql_dtype_dict_from_frame(frame: Frame) -> dict[str, Any]:
         def isnull(val: Any) -> bool:
             return val is None or np.isnan(val)
 
