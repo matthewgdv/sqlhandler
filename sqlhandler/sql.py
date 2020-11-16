@@ -234,15 +234,12 @@ class Sql:
 
     @staticmethod
     def _sql_dtype_dict_from_frame(frame: Frame) -> dict[str, Any]:
-        def isnull(val: Any) -> bool:
-            return val is None or np.isnan(val)
-
         def sqlalchemy_dtype_from_series(series: pd.code.series.Series) -> Any:
             if series.dtype.name in ["int64", "Int64"]:
-                if not (nums := [num for num in series if not isnull(num)]):
+                if series.isnull().all():
                     return alch.types.Integer
                 else:
-                    minimum, maximum = min(nums), max(nums)
+                    minimum, maximum = series.min(), series.max()
 
                     if 0 <= minimum and maximum <= 255:
                         return alch.dialects.mssql.TINYINT
