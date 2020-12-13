@@ -22,7 +22,7 @@ class BaseSchema(NameSpace):
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name='{self._name}', num_objects={len(self)}, objects={[table for table, _ in self]})"
 
-    def __call__(self, mapping: dict = None, / , **kwargs: Any) -> Schema:
+    def __call__(self, mapping: dict = None, / , **kwargs: Any) -> BaseSchema:
         if mapping is None and not kwargs:
             if not self._database.shape[self._name].registry:
                 self._database._reflect_schema(self._name)
@@ -88,7 +88,7 @@ class BaseSchemas(NameSpace):
     def __repr__(self) -> str:
         return f"""{type(self).__name__}(num_schemas={len(self)}, schemas=[{", ".join([f"{type(schema).__name__}(name='{name}', tables={len(schema)})" for name, schema in self])}])"""
 
-    def __call__(self, mapping: dict = None, / , **kwargs: Any) -> Schema:
+    def __call__(self, mapping: dict = None, / , **kwargs: Any) -> BaseSchemas:
         if mapping is None and not kwargs:
             self._database._reflect_database()
         else:
@@ -144,6 +144,6 @@ class SchemaRouter:
     def remove_object_if_exists(self, name: ObjectName) -> None:
         for accessor in self.accessors:
             try:
-                del accessor[name.schema][name.stem]
+                del accessor[name.schema.name][name.stem]
             except Exception:
                 pass
