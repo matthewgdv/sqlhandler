@@ -120,7 +120,7 @@ class BaseModel(metaclass=ModelMeta):
         self.metadata.sql.session.delete(self)
         return self
 
-    def clone(self, argdeltas: dict[Union[str, InstrumentedAttribute], Any] = None, **update_kwargs: Any) -> BaseModel:
+    def clone(self, argdeltas: dict[Union[str, InstrumentedAttribute], Any] = None, /, **update_kwargs: Any) -> BaseModel:
         """Create a clone (new primary_key, but copies of all other attributes) of this object in the detached state. Model.insert() will be required to persist it to the database."""
         valid_cols = [col.name for col in self.__table__.columns if col.name not in self.__table__.primary_key.columns]
         return type(self)(**{col: getattr(self, col) for col in valid_cols}).update(argdeltas, **update_kwargs)
