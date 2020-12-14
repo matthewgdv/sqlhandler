@@ -19,7 +19,7 @@ from .name import SchemaName, ObjectName, ViewName, TableName
 from .shape import DatabaseShape
 from .schema import Schemas, TableSchemas, ViewSchemas, SchemaRouter
 
-from sqlhandler.custom import Model, AutoModel, Table
+from sqlhandler.custom import Model, TemplatedModel, Table
 
 if TYPE_CHECKING:
     from sqlhandler import Sql
@@ -34,7 +34,7 @@ class Database:
         self.meta = self._get_metadata()
 
         self.model = cast(Type[Model], declarative_base(metadata=self.meta, cls=self.sql.constructors.Model, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.Model.__name__, class_registry=self._null_registry))
-        self.auto_model = cast(Type[AutoModel], declarative_base(metadata=self.meta, cls=self.sql.constructors.AutoModel, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.AutoModel.__name__, class_registry=self._null_registry))
+        self.templated_model = cast(Type[TemplatedModel], declarative_base(metadata=self.meta, cls=self.sql.constructors.TemplatedModel, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.TemplatedModel.__name__, class_registry=self._null_registry))
 
         self.shape = DatabaseShape(database=self)
         self.objects, self.tables, self.views = Schemas(database=self), TableSchemas(database=self), ViewSchemas(database=self)

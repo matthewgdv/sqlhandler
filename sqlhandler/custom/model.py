@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Union, Dict, TYPE_CHECKING, Type, cast
+from typing import Any, Union, TYPE_CHECKING, Type, cast
 
 import sqlalchemy as alch
-from sqlalchemy import Column, true, null, func
+from sqlalchemy import Column, true, func
 from sqlalchemy import types, event
 from sqlalchemy.sql.base import ImmutableColumnCollection
 from sqlalchemy.orm import backref
@@ -133,13 +133,13 @@ class Model(BaseModel):
         return dict(schema=schema, is_declarative=True)
 
 
-class AutoModel(Model):
+class TemplatedModel(Model):
     @declared_attr
     def __tablename__(cls):
         return str(Str(cls.__name__).case.snake())
 
     id = Column(types.Integer, primary_key=True)
-    name = Column(types.String(50), nullable=True, server_default=null())
+    # name = Column(types.String(50), nullable=True, server_default=null())
 
     @declared_attr
     def created(cls):

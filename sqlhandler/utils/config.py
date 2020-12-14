@@ -1,35 +1,29 @@
 from __future__ import annotations
 
 from maybe import Maybe
-from subtypes import ValueEnum
 import iotools
+
 import sqlhandler
+from sqlhandler.enums import Dialect
 
 from sqlalchemy.engine.url import URL
-from sqlalchemy import create_engine
-
-
-class Dialect(ValueEnum):
-    """Enum of known dialect drivers."""
-    MS_SQL, MY_SQL, SQLITE, POSTGRESQL, ORACLE = "mssql", "mysql", "sqlite", "postgresql+psycopg2", "oracle"
 
 
 class Url(URL):
     """Class representing a sql connection URL."""
 
-    def __init__(self, drivername: str = None, database: str = None, username: str = None, password: str = None, host: str = None, port: str = None, query: dict = None) -> None:
-        super().__init__(drivername=drivername, username=Maybe(username).else_(""), password=password, host=host, port=port, database=database, query=query)
+    def __init__(self, drivername: Dialect = None, database: str = None, username: str = None, password: str = None, host: str = None, port: int = None, query: dict = None) -> None:
+        super().__init__(drivername=str(drivername), username=Maybe(username).else_(""), password=password, host=host, port=port, database=str(database), query=query)
 
 
 class Config(iotools.Config):
     """A config class granting access to an os-specific appdata directory for use by this library."""
-    Dialect = Dialect
     name = sqlhandler.__name__
     default = {"default_connection": "memory", "connections": {"memory": {"drivername": "sqlite", "default_database": None, "username": None, "password": None, "host": "", "port": None, "query": None}}}
 
     def add_connection(self, connection: str, drivername: str, default_database: str, username: str = None, password: str = None, host: str = None, port: str = None, query: dict = None, is_default: bool = False) -> None:
         """Add a new connection with the given arguments."""
-        self.data.connections[connection] = dict(drivername=drivername, default_database=default_database, username=username, password=password, host=host, port=port, query=query)
+        self.data.connections[connection] = dict(drivername=str(drivername), default_database=default_database, username=username, password=password, host=host, port=port, query=query)
         if is_default:
             self.set_default_connection(connection=connection)
 
@@ -51,4 +45,4 @@ class Config(iotools.Config):
             database = Maybe(database).else_(settings.default_database)
             return Url(drivername=settings.drivername, database=database, username=settings.username, password=settings.password, host=settings.host, port=settings.port, query=Maybe(settings.query).else_(None))
         else:
-            return create_engine(connection).url
+            raise RuntimeError(f"Connection '{connection}' not found in preconfigured connections:\n\n{list(self.data.connections)}.")

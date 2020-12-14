@@ -8,7 +8,8 @@ from sqlalchemy.orm import backref, relationship
 
 from subtypes import Str, Dict, Enum
 
-from .misc import ForeignKey, absolute_namespace
+from .misc import absolute_namespace
+from sqlalchemy import ForeignKey
 
 if TYPE_CHECKING:
     from .model import BaseModel, Table
@@ -54,8 +55,8 @@ class Relationship:
             self.relationship, self.name, self.bases, self.namespace = rel, table_name, bases, namespace
             self.plural = str(Str(self.name).case.plural())
 
-            pk_key, = [key for key, val in absolute_namespace(bases=bases, namespace=namespace).items() if isinstance(val, Column) and val.primary_key]
-            self.pk = f"{self.name}.{pk_key}"
+            pk_key, = [key for key, val in absolute_namespace(bases=bases, namespace=namespace).items() if isinstance(val, Column) and val.primary_key] or [None]
+            self.pk = f"{self.name}.{pk_key}" if pk_key else None
 
         def __repr__(self) -> str:
             return f"{type(self).__name__}({', '.join([f'{attr}={repr(val)}' for attr, val in self.__dict__.items() if not attr.startswith('_')])})"
@@ -110,6 +111,9 @@ class Relationship:
             table = self.association
         else:
             from .model import Table
+
+            if not self.this.pk:
+                raise RuntimeError(f"Table '{self.this.name}' must have a primary key to build a many-to-many relationship.")
 
             name = self._casing(f"association_{self.this.name}_{self.target.name}")
             this_col = Column(self._casing(f"{self.this.name}_{self.settings.fk_suffix}"), types.Integer, ForeignKey(self.this.pk))
