@@ -51,13 +51,6 @@ class Sql:
         lazy_schemas = {"information_schema"}
 
     Url = Url
-    Select, SelectInto, Update, Insert, Delete = Select, SelectInto, Update, Insert, Delete
-    text, literal = alch.text, alch.literal
-    AND, OR, CAST, CASE, TRUE, FALSE = alch.and_, alch.or_, alch.cast, alch.case, alch.true(), alch.false()
-
-    Table, Column, ForeignKey, Index, CheckConstraint, Relationship, relationship, backref = alch.Table, alch.Column, alch.ForeignKey, alch.Index, alch.CheckConstraint, Relationship, relationship, backref
-    Datetime, Date = SubtypesDateTime, SubtypesDate
-    type, func, sqlalchemy = alch.types, alch.func, alch
 
     def __init__(self, url: Url, log: PathLike = None, autocommit: bool = False, config: Config = None) -> None:
         self.constructors, self.settings = self.Constructors(), self.Settings()
@@ -73,6 +66,14 @@ class Sql:
 
         self.StoredProcedure, self.Script = self.constructors.StoredProcedure.from_sql(self), self.constructors.Script.from_sql(self)
         self.transaction = Transaction(self)
+
+        self.Select, self.SelectInto, self.Update, self.Insert, self.Delete = Select, SelectInto, Update, Insert, Delete
+        self.text, self.literal = alch.text, alch.literal
+        self.AND, self.OR, self.CAST, self.CASE, self.TRUE, self.FALSE = alch.and_, alch.or_, alch.cast, alch.case, alch.true(), alch.false()
+
+        self.Table, self.Column, self.ForeignKey, self.Index, self.CheckConstraint, self.Relationship, self.relationship, self.backref = alch.Table, alch.Column, alch.ForeignKey, alch.Index, alch.CheckConstraint, Relationship, relationship, backref
+        self.Datetime, self.Date = SubtypesDateTime, SubtypesDate
+        self.type, self.func, self.sqlalchemy = alch.types, alch.func, alch
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(engine={repr(self.engine)}, database={repr(self.database)})"
