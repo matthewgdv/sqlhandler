@@ -34,11 +34,15 @@ class ModelMeta(DeclarativeMeta):
 
     def __new__(mcs, name: str, bases: tuple, namespace: dict) -> ModelMeta:
         if name == "BaseModel" and not bases:
+            # noinspection PyTypeChecker
             return type(name, bases, namespace)
 
         abs_ns = absolute_namespace(bases=bases, namespace=namespace)
 
         if relationships := {key: val for key, val in abs_ns.items() if isinstance(val, Relationship)}:
+            if any(rel.kind == Relationship.Kind.SELF_REFERENTIAL for rel in relationships.values()) and "id" in abs_ns and "id" not in namespace:
+                namespace["id"] = abs_ns["id"]
+
             table_name = type(name, (), abs_ns).__tablename__
             for attribute, relationship in relationships.items():
                 relationship.build(table_name=table_name, bases=bases, namespace=namespace, attribute=attribute)
@@ -120,6 +124,7 @@ class BaseModel(metaclass=ModelMeta):
         self.metadata.sql.session.delete(self)
         return self
 
+    # noinspection PyArgumentList
     def clone(self, argdeltas: dict[Union[str, InstrumentedAttribute], Any] = None, /, **update_kwargs: Any) -> BaseModel:
         """Create a clone (new primary_key, but copies of all other attributes) of this object in the detached state. Model.insert() will be required to persist it to the database."""
         valid_cols = [col.name for col in self.__table__.columns if col.name not in self.__table__.primary_key.columns]

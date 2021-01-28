@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from typing import Any, TYPE_CHECKING
+from typing import Any, TYPE_CHECKING, Union
 
 import pandas as pd
 
@@ -52,7 +52,7 @@ class Sql:
 
     Url = Url
 
-    def __init__(self, url: Url, log: PathLike = None, autocommit: bool = False, config: Config = None) -> None:
+    def __init__(self, url: Union[Url, str], log: PathLike = None, autocommit: bool = False, config: Config = None) -> None:
         self.constructors, self.settings = self.Constructors(), self.Settings()
         self.config = self.constructors.Config() if config is None else config
 
@@ -209,8 +209,8 @@ class Sql:
 
     # Private internal methods
 
-    def _create_engine(self, url: Url) -> alch.engine.base.Engine:
-        engine = alch.create_engine(str(url), echo=False, dialect=self._customize_dialect(url.get_dialect()()))
+    def _create_engine(self, url: Union[Url, str]) -> alch.engine.base.Engine:
+        engine = alch.create_engine(str(url), echo=False, dialect=self._customize_dialect(url.get_dialect()())) if isinstance(url, Url) else alch.create_engine(str(url), echo=False)
         engine.sql = self
 
         return engine
@@ -262,6 +262,10 @@ class Sql:
         url = config.generate_url(connection=connection, database=database)
         return cls(url=url, log=log, autocommit=autocommit)
 
+    @classmethod
+    def from_memory(cls) -> Sql:
+        return cls("sqlite://")
+
 
 class Transaction:
     def __init__(self, sql: Sql) -> None:
@@ -272,17 +276,13 @@ class Transaction:
 
     def __enter__(self) -> Transaction:
         self.sql.session.rollback()
-        self.start = DateTime.now()
+        self.now = DateTime.now()
         return self
 
     def __exit__(self, ex_type: Any, ex_value: Any, ex_traceback: Any) -> None:
         self.sql.session.commit() if ex_type is None else self.sql.session.rollback()
-        self.start = None
+        self.now = None
 
     @property
     def state(self) -> str:
         return self.raw._state.name
-
-    @property
-    def now(self) -> DateTime:
-        return DateTime.now()
