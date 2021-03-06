@@ -16,12 +16,12 @@ from pathmagic import File, PathLike
 from miscutils import cached_property
 from iotools.misc.serializer import LostObject
 
-from sqlhandler.custom import ModelMeta, Model, TemplatedModel, ReflectedModel, Query, Session, Relationship, SubtypesDateTime, SubtypesDate, BitLiteral, Select, Update, Insert, Delete, SelectInto
-from sqlhandler.database.schema import TableSchemas, ViewSchemas
-from sqlhandler.utils import StoredProcedure, Script, SqlLog
-from sqlhandler.database import Database, Metadata, Schemas, Schema
-from sqlhandler.utils import Config, Url
-from sqlhandler.enums import Dialect, IfExists
+from .custom import ModelMeta, Model, TemplatedModel, ReflectedModel, Query, Session, Relationship, SubtypesDateTime, SubtypesDate, BitLiteral, Select, Update, Insert, Delete, SelectInto
+from .database.schema import TableSchemas, ViewSchemas
+from .utils import StoredProcedure, Script, SqlLog
+from .database import Database, Metadata, Schemas, Schema
+from .utils import Config, Url
+from .enums import Dialect
 
 if TYPE_CHECKING:
     from alembic.operations import Operations
@@ -36,7 +36,7 @@ class Sql:
     """
 
     class Enums:
-        Dialect, IfExists = Dialect, IfExists
+        Dialect, IfExists = Dialect, Frame.Enums.IfExists
 
     class Constructors:
         ModelMeta, Model, TemplatedModel, ReflectedModel = ModelMeta, Model, TemplatedModel, ReflectedModel
