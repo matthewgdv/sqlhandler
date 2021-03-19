@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, List, Callable, TypeVar, TYPE_CHECKING, Dict, Tuple, Optional
+from typing import Any, TYPE_CHECKING, Tuple, Optional
 from abc import ABC, abstractmethod
 
+from miscutils import ParametrizableMixin
 from sqlalchemy.orm import Query
 import sqlparse
 
@@ -13,54 +14,35 @@ if TYPE_CHECKING:
     from sqlhandler import Sql
 
 
-SelfType = TypeVar("SelfType")
-
 # TODO: fix ON clause whitespace in all situations
 
 
-class SqlBoundMixin:
-    """A mixin class for objects that require a reference to an Sql object in their constructor."""
-
-    def __init__(self, *args: Any, sql: Sql = None, **kwargs: Any) -> None:
-        self.sql = sql
-
-    @classmethod
-    def from_sql(cls: SelfType, sql: Sql) -> Callable[[...], SelfType]:
-        def wrapper(*args: Any, **kwargs: Any) -> SqlBoundMixin:
-            return cls(*args, sql=sql, **kwargs)
-        return wrapper
-
-
-class Executable(SqlBoundMixin, ABC):
+class Executable(ParametrizableMixin, ABC):
     """An abstract class representing a SQL executable such. Concrete implementations such as scripts or stored procedures must inherit from this. An implementaion of Executable._compile_sql() must be provided."""
 
     def __init__(self, sql: Sql = None, verbose: bool = False) -> None:
-        self.sql = sql
+        self.sql: Optional[Sql] = None
         self.results: list[list[Frame]] = []
 
     def __call__(self, *args: Any, **kwargs: Any) -> Any:
         return self.execute(*args, **kwargs)
 
-    def execute(self, *args: Any, **kwargs: Any) -> Optional[list[Frame]]:
+    def parametrize(self, param: Sql) -> ParametrizableMixin:
+        self.sql = param
+        return self
+
+    def execute(self, params: dict) -> Optional[list[Frame]]:
         """Execute this executable SQL object. Passes on its args and kwargs to Executable._compile_sql()."""
-        statement, bindparams = self._compile_sql(*args, **kwargs)
-        bound = statement
-
-        if bindparams:
-            for key, val in bindparams.items():
-                bound = bound.replace(f":{key}", repr(val))
-
-        self.sql.log.write_sql(bound)
-
-        if (cursor := self.sql.session.execute(statement, bindparams).cursor) is None:
+        if (cursor := self._execute(params)) is None:
             return None
-        else:
-            self.results.append(self._get_frames_from_cursor(cursor))
-            return self.results[-1]
+
+        with cursor:
+            self.results.append(result := self._get_frames_from_cursor(cursor))
+            return result
 
     @abstractmethod
-    def _compile_sql(self, *args: Any, **kwargs: Any) -> Tuple[str, dict[str, Any]]:
-        pass
+    def _execute(self, params: dict):
+        raise NotImplementedError
 
     @staticmethod
     def _get_frames_from_cursor(cursor: Any) -> list[Frame]:
@@ -87,13 +69,11 @@ class StoredProcedure(Executable):
     def __repr__(self) -> str:
         return f"{type(self).__name__}(name={self.name}, schema={self.schema})"
 
-    def _compile_sql(self, *args: Any, **kwargs: Any) -> Tuple[str, dict[str, Any]]:
-        mappings = {
-            **{f"arg{index + 1}": {"bind": f":arg{index + 1}", "val": val} for index, val in enumerate(args)},
-            **{f"kwarg{index + 1}": {"bind": f"@{name}=:kwarg{index + 1}", "val": val} for index, (name, val) in enumerate(kwargs.items())}
-        }
-        proc_name = f"EXEC {f'[{self.database}].' if self.database is not None else ''}[{self.schema}].[{self.name}]"
-        return f"{proc_name} {', '.join([arg['bind'] for arg in mappings.values()])}", {name: arg["val"] for name, arg in mappings.items()}
+    def _execute(self, params: dict) -> Any:
+        with self.sql.engine.raw_connection() as con:
+            cursor = con.cursor()
+            cursor.callproc(f"{self.schema or self.sql.database.default_schema}.{self.name}", params)
+            return cursor
 
 
 class Script(Executable):
@@ -106,8 +86,8 @@ class Script(Executable):
     def __repr__(self) -> str:
         return f"{type(self).__name__}(file={self.file})"
 
-    def _compile_sql(self, *args: Any, **kwargs: Any) -> Tuple[str, dict[str, Any]]:
-        return self.file.content, {}
+    def _execute(self, *args, **kwargs) -> Any:
+        return self.sql.session.execute(self.file.content, *args, **kwargs).cursor
 
 
 def literal_statement(statement: Any, format_statement: bool = True) -> str:

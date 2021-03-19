@@ -21,9 +21,9 @@ class Config(iotools.Config):
     name = sqlhandler.__name__
     default = {"default_connection": "memory", "connections": {"memory": {"drivername": "sqlite", "default_database": None, "username": None, "password": None, "host": "", "port": None, "query": None}}}
 
-    def add_connection(self, connection: str, drivername: str, default_database: str, username: str = None, password: str = None, host: str = None, port: str = None, query: dict = None, is_default: bool = False) -> None:
+    def add_connection(self, connection: str, dialect: Dialect, default_database: str, username: str = None, password: str = None, host: str = None, port: str = None, query: dict = None, is_default: bool = False) -> None:
         """Add a new connection with the given arguments."""
-        driver_name = Dialect[drivername].map_to({
+        driver_name = Dialect[dialect].map_to({
             Dialect.MS_SQL: "mssql",
             Dialect.MY_SQL: "mysql",
             Dialect.SQLITE: "sqlite",
@@ -37,7 +37,7 @@ class Config(iotools.Config):
 
     def add_mssql_connection_with_integrated_security(self, connection: str, default_database: str, host: str, is_default: bool = False):
         """Add a SQL server connection that will use Windows integrated security."""
-        self.add_connection(connection=connection, drivername="mssql", default_database=default_database, host=host, query={"driver": "SQL+Server"}, is_default=is_default)
+        self.add_connection(connection=connection, dialect=Dialect.MS_SQL, default_database=default_database, host=host, query={"driver": "SQL+Server"}, is_default=is_default)
 
     def set_default_connection(self, connection: str) -> None:
         """Set the connection that will be used by default."""

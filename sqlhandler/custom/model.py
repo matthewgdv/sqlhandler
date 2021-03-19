@@ -144,7 +144,6 @@ class TemplatedModel(Model):
         return str(Str(cls.__name__).case.snake())
 
     id = Column(types.Integer, primary_key=True)
-    # name = Column(types.String(50), nullable=True, server_default=null())
 
     @declared_attr
     def created(cls):

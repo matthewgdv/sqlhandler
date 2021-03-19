@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, Union
 
 import sqlalchemy as alch
 from sqlalchemy.orm import backref
 
 from subtypes import Frame
+from iotools import Log
 
 from sqlhandler.utils import literal_statement
 
@@ -16,12 +17,12 @@ class Session(alch.orm.Session):
     def query(self, *entities: Any) -> Query:
         return super().query(*entities)
 
-    def execute(self, *args: Any, autocommit: bool = False, **kwargs: Any) -> alch.engine.ResultProxy:
+    def execute(self, clause: Any, params: Union[list, dict] = None, **kwargs: Any) -> alch.engine.ResultProxy:
         """Execute an valid object against this Session. If 'autocommit=True' is passed, the transaction will be commited if the statement completes without errors."""
-        res = super().execute(*args, **kwargs)
-        if autocommit:
-            self.commit()
-        return res
+        Log.debug(clause)
+        result = super().execute(clause=clause, params=params, **kwargs)
+        Log.debug(f"{result.rowcount} row(s) affected")
+        return result
 
 
 class Query(alch.orm.Query):
@@ -66,4 +67,3 @@ class Query(alch.orm.Query):
         for col in sub.c:
             setattr(sub, col.name, col)
         return sub
-

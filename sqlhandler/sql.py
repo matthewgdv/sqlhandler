@@ -7,18 +7,17 @@ from typing import Any, TYPE_CHECKING, Union
 import pandas as pd
 
 import sqlalchemy as alch
-from sqlalchemy.orm import backref, relationship
 from sqlalchemy.engine.default import DefaultDialect
 from sqlalchemy.dialects import mssql
 
 from subtypes import Frame, DateTime
-from pathmagic import File, PathLike
+from pathmagic import File
 from miscutils import cached_property
 from iotools.misc.serializer import LostObject
 
-from .custom import ModelMeta, Model, TemplatedModel, ReflectedModel, Query, Session, Relationship, SubtypesDateTime, SubtypesDate, BitLiteral, Select, Update, Insert, Delete, SelectInto
+from .custom import ModelMeta, Model, TemplatedModel, ReflectedModel, Query, Session, Relationship, SubtypesDateTime, SubtypesDate, BitLiteral, Select, Update, Insert, Delete
 from .database.schema import TableSchemas, ViewSchemas
-from .utils import StoredProcedure, Script, SqlLog
+from .utils import StoredProcedure, Script
 from .database import Database, Metadata, Schemas, Schema
 from .utils import Config, Url
 from .enums import Dialect
@@ -42,6 +41,7 @@ class Sql:
         ModelMeta, Model, TemplatedModel, ReflectedModel = ModelMeta, Model, TemplatedModel, ReflectedModel
         Database, Metadata, Schemas, Schema = Database, Metadata, Schemas, Schema
         Config, Query, Session = Config, Query, Session
+        Select, Update, Insert, Delete = Select, Update, Insert, Delete
         StoredProcedure, Script = StoredProcedure, Script
         Config, Frame = Config, Frame
 
@@ -50,30 +50,32 @@ class Sql:
         eager_reflection = False
         lazy_schemas = {"information_schema"}
 
+    class Declarative:
+        Column, ForeignKey, Index, CheckConstraint, Relationship = alch.Column, alch.ForeignKey, alch.Index, alch.CheckConstraint, Relationship
+        String, Integer, SmallInteger, BigInteger, Float, Decimal = alch.String, alch.Integer, alch.SmallInteger, alch.BigInteger, alch.Float, alch.Numeric
+        Boolean, Binary, Enum = alch.Boolean, alch.Binary, alch.Enum
+        Datetime, Date = SubtypesDateTime, SubtypesDate
+
     Url = Url
 
-    def __init__(self, url: Union[Url, str], log: PathLike = None, autocommit: bool = False, config: Config = None) -> None:
-        self.constructors, self.settings = self.Constructors(), self.Settings()
-        self.config = self.constructors.Config() if config is None else config
+    def __init__(self, url: Union[Url, str], config: Config = None) -> None:
+        self.settings = self.Settings()
+        self.config = self.Constructors.Config() if config is None else config
 
         self.engine = self._create_engine(url=url)
         self.engine.connect()
 
-        self.session = self.constructors.Session(bind=self.engine, query_cls=self.constructors.Query)
-        self.database = self.constructors.Database(self)
+        self.session = self.Constructors.Session(bind=self.engine, query_cls=self.Constructors.Query)
+        self.database = self.Constructors.Database(self)
 
-        self.log, self.autocommit = log, autocommit
-
-        self.StoredProcedure, self.Script = self.constructors.StoredProcedure.from_sql(self), self.constructors.Script.from_sql(self)
+        self.StoredProcedure, self.Script = self.Constructors.StoredProcedure[self], self.Constructors.Script[self]
+        self.Select, self.Update, self.Insert, self.Delete = self.Constructors.Select[self], self.Constructors.Update[self], self.Constructors.Insert[self], self.Constructors.Delete[self]
         self.transaction = Transaction(self)
 
-        self.Select, self.SelectInto, self.Update, self.Insert, self.Delete = Select, SelectInto, Update, Insert, Delete
-        self.text, self.literal = alch.text, alch.literal
-        self.AND, self.OR, self.CAST, self.CASE, self.TRUE, self.FALSE = alch.and_, alch.or_, alch.cast, alch.case, alch.true(), alch.false()
+        self.AND, self.OR, self.CAST, self.CASE, self.TRUE, self.FALSE = alch.and_, alch.or_, alch.cast, alch.case, alch.true, alch.false
+        self.TEXT, self.LITERAL = alch.text, alch.literal
 
-        self.Table, self.Column, self.ForeignKey, self.Index, self.CheckConstraint, self.Relationship, self.relationship, self.backref = alch.Table, alch.Column, alch.ForeignKey, alch.Index, alch.CheckConstraint, Relationship, relationship, backref
-        self.Datetime, self.Date = SubtypesDateTime, SubtypesDate
-        self.type, self.func, self.sqlalchemy = alch.types, alch.func, alch
+        self.func, self.sqlalchemy = alch.func, alch
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(engine={repr(self.engine)}, database={repr(self.database)})"
@@ -88,7 +90,7 @@ class Sql:
         self.transaction.__exit__(ex_type=ex_type, ex_value=ex_value, ex_traceback=ex_traceback)
 
     def __getstate__(self) -> dict:
-        return {"engine": LostObject(self.engine), "database": LostObject(self.database), "autocommit": self.autocommit}
+        return {"engine": LostObject(self.engine), "database": LostObject(self.database)}
 
     def __setstate__(self, attrs: dict) -> None:
         self.__dict__ = attrs
@@ -125,24 +127,8 @@ class Sql:
 
         return Operations(MigrationContext.configure(self.engine.connect()))
 
-    @property
-    def log(self) -> SqlLog:
-        """Property controlling access to a special SqlLog class. When setting, a simple file path should be used and an appropriate SqlLog will be created."""
-        return self._log
-
-    @log.setter
-    def log(self, val: File) -> None:
-        self._log = SqlLog(path=val)
-
     def query(self, *entities: Any) -> Query:
         return self.session.query(*entities)
-
-    def initialize_log(self, name: str, location: PathLike = None) -> SqlLog:
-        """Instantiates a matt.log.SqlLog object from a name and a dirpath, and binds it to this object's 'log' attribute. If 'active' argument is 'False', this method does nothing."""
-        self._log = SqlLog.from_details(log_name=name, log_dir=location, active=False)
-        return self._log
-
-    # Conversion Methods
 
     def query_to_frame(self, query: Query, labels: bool = False) -> Frame:
         """Convert sqlalchemy.orm.Query object to a pandas DataFrame. Optionally apply table labels to columns and/or print an ascii representation of the DataFrame."""
@@ -150,25 +136,25 @@ class Sql:
 
         result = self.session.execute(query.statement)
         cols = [col[0] for col in result.cursor.description]
-        frame = self.constructors.Frame(result.fetchall(), columns=cols)
+        frame = self.Constructors.Frame(result.fetchall(), columns=cols)
 
         return frame
 
     def plaintext_query_to_frame(self, query: str) -> Frame:
         """Convert plaintext SQL to a pandas DataFrame. The SQL statement must be a SELECT that returns rows."""
-        return self.constructors.Frame(pd.read_sql_query(query, self.engine))
+        return self.Constructors.Frame(pd.read_sql_query(query, self.engine))
 
     def table_to_frame(self, table: str, schema: str = None) -> Frame:
         """Reads the target table or view (from the specified schema) into a pandas DataFrame."""
-        return self.constructors.Frame(pd.read_sql_table(table, self.engine, schema=schema))
+        return self.Constructors.Frame(pd.read_sql_table(table, self.engine, schema=schema))
 
     def excel_to_table(self, filepath: os.PathLike, table: str = "temp", schema: str = None, if_exists: Sql.Enums.IfExists = Enums.IfExists.FAIL, primary_key: str = "id", **kwargs: Any) -> Model:
         """Bulk insert the content of the target '.xlsx' file to the specified table."""
-        return self.frame_to_table(dataframe=self.constructors.Frame.from_excel(filepath, **kwargs), table=table, schema=schema, if_exists=if_exists, primary_key=primary_key)
+        return self.frame_to_table(dataframe=self.Constructors.Frame.from_excel(filepath, **kwargs), table=table, schema=schema, if_exists=if_exists, primary_key=primary_key)
 
     def frame_to_table(self, dataframe: pd.DataFrame, table: str, schema: str = None, if_exists: Sql.Enums.IfExists = Enums.IfExists.FAIL, primary_key: str = "id") -> Model:
         """Bulk insert the content of a pandas DataFrame to the specified table."""
-        dataframe = self.constructors.Frame(dataframe)
+        dataframe = self.Constructors.Frame(dataframe)
 
         has_identity_pk = False
         if primary_key is None:
@@ -205,9 +191,7 @@ class Sql:
         cols = [col.name for col in list(type(orm_objects[0]).__table__.columns)]
         vals = [[getattr(item, col) for col in cols] for item in orm_objects]
 
-        return self.constructors.Frame(vals, columns=cols)
-
-    # Private internal methods
+        return self.Constructors.Frame(vals, columns=cols)
 
     def _create_engine(self, url: Union[Url, str]) -> alch.engine.base.Engine:
         engine = alch.create_engine(str(url), echo=False, dialect=self._customize_dialect(url.get_dialect()())) if isinstance(url, Url) else alch.create_engine(str(url), echo=False)
@@ -260,7 +244,7 @@ class Sql:
     def from_connection(cls, connection: str = None, database: str = None, log: File = None, autocommit: bool = False) -> Sql:
         config = cls.Constructors.Config()
         url = config.generate_url(connection=connection, database=database)
-        return cls(url=url, log=log, autocommit=autocommit)
+        return cls(url=url, config=config)
 
     @classmethod
     def from_memory(cls) -> Sql:

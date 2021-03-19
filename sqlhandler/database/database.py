@@ -11,7 +11,7 @@ from sqlalchemy.ext.declarative import declarative_base
 
 from maybe import Maybe
 from subtypes import Str, Dict
-from miscutils import cached_property, PercentagePrinter, Printer
+from miscutils import cached_property, PercentagePrinter
 from iotools import Cache
 
 from .meta import NullRegistry, Metadata
@@ -33,8 +33,8 @@ class Database:
         self.sql, self.name, self.cache, self._post_reshape_countdown = sql, sql.engine.url.database, Cache(file=sql.config.folder.new_file("sql_cache", "pkl"), days=5), 0
         self.meta = self._get_metadata()
 
-        self.model = cast(Type[Model], declarative_base(metadata=self.meta, cls=self.sql.constructors.Model, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.Model.__name__, class_registry=self._null_registry))
-        self.templated_model = cast(Type[TemplatedModel], declarative_base(metadata=self.meta, cls=self.sql.constructors.TemplatedModel, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.TemplatedModel.__name__, class_registry=self._null_registry))
+        self.model = cast(Type[Model], declarative_base(metadata=self.meta, cls=self.sql.Constructors.Model, metaclass=self.sql.Constructors.ModelMeta, name=self.sql.Constructors.Model.__name__, class_registry=self._null_registry))
+        self.templated_model = cast(Type[TemplatedModel], declarative_base(metadata=self.meta, cls=self.sql.Constructors.TemplatedModel, metaclass=self.sql.Constructors.ModelMeta, name=self.sql.Constructors.TemplatedModel.__name__, class_registry=self._null_registry))
 
         self.shape = DatabaseShape(database=self)
         self.objects, self.tables, self.views = Schemas(database=self), TableSchemas(database=self), ViewSchemas(database=self)
@@ -98,13 +98,13 @@ class Database:
 
     def _get_metadata(self) -> Metadata:
         if not self.sql.settings.cache_metadata:
-            return self.sql.constructors.Metadata(sql=self.sql, bind=self.sql.engine)
+            return self.sql.Constructors.Metadata(sql=self.sql, bind=self.sql.engine)
 
         try:
-            meta = self.cache.setdefault(self.name, self.sql.constructors.Metadata())
+            meta = self.cache.setdefault(self.name, self.sql.Constructors.Metadata())
         except Exception as ex:
             warnings.warn(f"The following exception ocurred when attempting to retrieve the previously cached Metadata, but was supressed:\n\n{ex}\n\nStarting with blank Metadata...")
-            meta = self.sql.constructors.Metadata()
+            meta = self.sql.Constructors.Metadata()
 
         meta.bind, meta.sql = self.sql.engine, self.sql
 
@@ -138,8 +138,8 @@ class Database:
         with self._post_reshape_soon():
             for schema in PercentagePrinter(sorted(self.shape.schemas, key=lambda name: name.name), formatter=lambda name: f"Reflecting schema: {name.name}"):
                 if schema.name not in self.sql.settings.lazy_schemas:
-                    with Printer.from_indentation():
-                        self._reflect_schema(schema=schema)
+                    # with Printer.from_indentation():
+                    self._reflect_schema(schema=schema)
 
     def _reflect_schema(self, schema: SchemaName):
         with self._post_reshape_soon():
@@ -161,7 +161,7 @@ class Database:
             return table
 
     def _autoload_models(self) -> None:
-        reflected_model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.constructors.ReflectedModel, metaclass=self.sql.constructors.ModelMeta, name=self.sql.constructors.ReflectedModel.__name__, class_registry=(registry := {}))
+        reflected_model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.Constructors.ReflectedModel, metaclass=self.sql.Constructors.ModelMeta, name=self.sql.Constructors.ReflectedModel.__name__, class_registry=(registry := {}))
         automap = automap_base(declarative_base=reflected_model)
         automap.classes = Dict()
 

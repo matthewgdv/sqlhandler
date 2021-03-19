@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import os
-import warnings
-
 from typing import TYPE_CHECKING
 
 from django.apps import AppConfig
@@ -47,16 +44,19 @@ class SqlConfig(AppConfig):
         import sqlhandler.django as root
 
         self.settings.update(getattr(settings, "SQLHANDLER_SETTINGS", {}))
-        for connection in db.connections.databases:
-            self.connections[connection] = self.initialize_database(connection=connection)
+        con = db.connections
+        for name, connection in db.connections.databases.items():
+            driver = self.settings.ENGINES[connection["ENGINE"].split(".")[-1]]
+            url = Sql.Url(drivername=driver, database=connection["NAME"], username=connection["USER"], password=connection["PASSWORD"], host=connection["HOST"], port=connection["PORT"])
+            self.connections[name] = self.initialize_database(url)
 
         type(self).sql = root.sql = self.connections.default or None
 
-    def initialize_database(self, connection: str):
+    def initialize_database(self, url: Sql.Url):
         from .sql import DjangoSql
 
         try:
-            return DjangoSql(connection=connection)
+            return DjangoSql(url)
         except Exception as ex:
             import traceback
             print(f"The following exception caused sqlhandler.django to fail to start but was suppressed:\n\n{traceback.format_exc()}")
