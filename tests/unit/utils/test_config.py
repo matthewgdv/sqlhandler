@@ -1,10 +1,6 @@
 # import pytest
 
 
-class TestDialect:
-    pass
-
-
 class TestUrl:
     pass
 

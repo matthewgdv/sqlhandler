@@ -2,10 +2,10 @@
 
 
 class TestSqlModel:
-    def test_django():  # synced
+    def test_django(self):  # synced
         assert True
 
-    def test_handler():  # synced
+    def test_handler(self):  # synced
         assert True
 
     def test___call__(self):  # synced
@@ -13,7 +13,7 @@ class TestSqlModel:
 
 
 class TestDjangoModel:
-    def test_sql():  # synced
+    def test_sql(self):  # synced
         assert True
 
     def test___call__(self):  # synced

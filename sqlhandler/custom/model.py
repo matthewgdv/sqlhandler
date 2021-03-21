@@ -87,6 +87,9 @@ class BaseModel(metaclass=ModelMeta):
     metadata: Metadata
     __mapper__: Mapper
 
+    def __init__(self, *args, **kwargs):
+        pass
+
     def __repr__(self) -> str:
         return f"{type(self).__name__}({', '.join([f'{col.name}={repr(getattr(self, col.name))}' for col in type(self).__table__.columns])})"
 

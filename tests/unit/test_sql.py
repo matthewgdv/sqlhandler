@@ -2,10 +2,16 @@
 
 
 class TestSql:
-    class TestIfExists:
+    class TestEnums:
         pass
 
     class TestConstructors:
+        pass
+
+    class TestSettings:
+        pass
+
+    class TestDeclarative:
         pass
 
     def test___len__(self):  # synced
@@ -20,22 +26,22 @@ class TestSql:
     def test_Model(self):  # synced
         assert True
 
-    def test_AutoModel(self):  # synced
-        assert True
-
-    def test_orm(self):  # synced
+    def test_TemplatedModel(self):  # synced
         assert True
 
     def test_objects(self):  # synced
         assert True
 
+    def test_tables(self):  # synced
+        assert True
+
+    def test_views(self):  # synced
+        assert True
+
     def test_operations(self):  # synced
         assert True
 
-    def test_log(self):  # synced
-        assert True
-
-    def test_initialize_log(self):  # synced
+    def test_query(self):  # synced
         assert True
 
     def test_query_to_frame(self):  # synced
@@ -59,17 +65,22 @@ class TestSql:
     def test__create_engine(self):  # synced
         assert True
 
-    def test__create_url(self):  # synced
-        assert True
-
     def test__customize_dialect(self):  # synced
         assert True
 
-    def test__sql_dtype_dict_from_frame():  # synced
+    def test__sql_dtype_dict_from_frame(self):  # synced
         assert True
 
-    def test_isnull():  # synced
+    def test__sqlalchemy_dtype_from_series(self):  # synced
         assert True
 
-    def test_sqlalchemy_dtype_from_series():  # synced
+    def test_from_connection(self):  # synced
+        assert True
+
+    def test_from_memory(self):  # synced
+        assert True
+
+
+class TestTransaction:
+    def test_state(self):  # synced
         assert True

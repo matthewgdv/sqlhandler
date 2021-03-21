@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import os
 
-from typing import Any, TYPE_CHECKING, Union
+from typing import Any, TYPE_CHECKING, Type, Union
 
 import pandas as pd
 
@@ -34,6 +34,11 @@ class Sql:
     The 'Sql.orm' and 'Sql.objects' attributes provide access via attribute or item access to the reflected database models and underlying table objects, respectively.
     """
 
+    class Settings:
+        cache_metadata = reflect_tables = reflect_views = True
+        eager_reflection = False
+        cache_validity_days = None
+
     class Enums:
         Dialect, IfExists = Dialect, Frame.Enums.IfExists
 
@@ -44,11 +49,6 @@ class Sql:
         Select, Update, Insert, Delete = Select, Update, Insert, Delete
         StoredProcedure, Script = StoredProcedure, Script
         Config, Frame = Config, Frame
-
-    class Settings:
-        cache_metadata = reflect_tables = reflect_views = True
-        eager_reflection = False
-        lazy_schemas = {"information_schema"}
 
     class Declarative:
         Column, ForeignKey, Index, CheckConstraint, Relationship = alch.Column, alch.ForeignKey, alch.Index, alch.CheckConstraint, Relationship
@@ -96,12 +96,12 @@ class Sql:
         self.__dict__ = attrs
 
     @property
-    def Model(self) -> Model:
+    def Model(self) -> Type[Model]:
         """Custom base class for declarative and automap bases to inherit from. Represents a mapped table in a sql database."""
         return self.database.model
 
     @property
-    def TemplatedModel(self) -> TemplatedModel:
+    def TemplatedModel(self) -> Type[TemplatedModel]:
         return self.database.templated_model
 
     @property

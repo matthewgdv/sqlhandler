@@ -33,8 +33,12 @@ class Database:
         self.sql, self.name, self.cache, self._post_reshape_countdown = sql, sql.engine.url.database, Cache(file=sql.config.folder.new_file("sql_cache", "pkl"), days=5), 0
         self.meta = self._get_metadata()
 
-        self.model = cast(Type[Model], declarative_base(metadata=self.meta, cls=self.sql.Constructors.Model, metaclass=self.sql.Constructors.ModelMeta, name=self.sql.Constructors.Model.__name__, class_registry=self._null_registry))
-        self.templated_model = cast(Type[TemplatedModel], declarative_base(metadata=self.meta, cls=self.sql.Constructors.TemplatedModel, metaclass=self.sql.Constructors.ModelMeta, name=self.sql.Constructors.TemplatedModel.__name__, class_registry=self._null_registry))
+        self.model = cast(Type[Model], declarative_base(metadata=self.meta, name=self.sql.Constructors.Model.__name__,
+                                                        cls=self.sql.Constructors.Model, metaclass=self.sql.Constructors.ModelMeta,
+                                                        class_registry=self._null_registry))
+        self.templated_model = cast(Type[TemplatedModel], declarative_base(metadata=self.meta, name=self.sql.Constructors.TemplatedModel.__name__,
+                                                                           cls=self.sql.Constructors.TemplatedModel, metaclass=self.sql.Constructors.ModelMeta,
+                                                                           class_registry=self._null_registry))
 
         self.shape = DatabaseShape(database=self)
         self.objects, self.tables, self.views = Schemas(database=self), TableSchemas(database=self), ViewSchemas(database=self)
@@ -161,7 +165,8 @@ class Database:
             return table
 
     def _autoload_models(self) -> None:
-        reflected_model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.Constructors.ReflectedModel, metaclass=self.sql.Constructors.ModelMeta, name=self.sql.Constructors.ReflectedModel.__name__, class_registry=(registry := {}))
+        reflected_model = declarative_base(bind=self.sql.engine, metadata=self.meta, cls=self.sql.Constructors.ReflectedModel, metaclass=self.sql.Constructors.ModelMeta,
+                                           name=self.sql.Constructors.ReflectedModel.__name__, class_registry=(registry := {}))
         automap = automap_base(declarative_base=reflected_model)
         automap.classes = Dict()
 

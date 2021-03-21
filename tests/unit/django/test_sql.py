@@ -2,6 +2,12 @@
 
 
 class TestDjangoSql:
+    class TestSettings:
+        pass
+
+    class TestConstructors:
+        pass
+
     def test_django(self):  # synced
         assert True
 
