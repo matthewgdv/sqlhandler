@@ -1,28 +1,13 @@
 from __future__ import annotations
 
-from typing import Any, Union
+from typing import Any
 
 import sqlalchemy as alch
 from sqlalchemy.orm import backref
 
-from subtypes import Frame
-from iotools import Log
+from sqlhandler.frame import Frame
 
-from sqlhandler.utils import literal_statement
-
-
-class Session(alch.orm.Session):
-    """Custom subclass of sqlalchemy.orm.Session granting access to a custom Query class through the '.query()' method."""
-
-    def query(self, *entities: Any) -> Query:
-        return super().query(*entities)
-
-    def execute(self, clause: Any, params: Union[list, dict] = None, **kwargs: Any) -> alch.engine.ResultProxy:
-        """Execute an valid object against this Session. If 'autocommit=True' is passed, the transaction will be commited if the statement completes without errors."""
-        Log.debug(clause)
-        result = super().execute(clause=clause, params=params, **kwargs)
-        Log.debug(f"{result.rowcount} row(s) affected")
-        return result
+from .utils import literal_statement
 
 
 class Query(alch.orm.Query):
@@ -41,7 +26,7 @@ class Query(alch.orm.Query):
     def vector(self) -> list:
         """Transpose all records in a single column into a list. If the query returns more than one column, this will raise a RuntimeError."""
         vals = self.all()
-        if all([len(row) == 1 for row in vals]):
+        if all(len(row) == 1 for row in vals):
             return [row[0] for row in vals]
         else:
             raise RuntimeError("Multiple columns selected. Expected exactly one value per row, got multiple.")

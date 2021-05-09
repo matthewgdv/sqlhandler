@@ -2,8 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Callable, TYPE_CHECKING
 
-from sqlalchemy import Column
-from sqlalchemy import types
+from sqlalchemy import Column, types
 from sqlalchemy.orm import backref, relationship
 
 from subtypes import Str, Dict, Enum

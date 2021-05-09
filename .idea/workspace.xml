@@ -1,6 +1,102 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
+  <component name="ChangeListManager">
+    <list default="true" id="fc0532ac-426c-498f-9c5c-0b20727b7b5a" name="Default Changelist" comment="">
+      <change afterPath="$PROJECT_DIR$/sqlhandler/custom/result.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/sqlhandler/custom/session.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/sqlhandler/custom/utils.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/sqlhandler/frame/__init__.py" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/sqlhandler/frame/frame.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/sqlhandler.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/sqlhandler.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sqlhandler/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sqlhandler/custom/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/custom/__init__.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sqlhandler/custom/expression.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/custom/expression.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sqlhandler/custom/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/custom/model.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sqlhandler/custom/query.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/custom/query.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sqlhandler/custom/relationship.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/custom/relationship.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sqlhandler/custom/table.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/custom/table.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sqlhandler/database/database.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/database/database.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sqlhandler/database/meta.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/database/meta.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sqlhandler/database/shape.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/database/shape.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sqlhandler/enums.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/enums.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sqlhandler/sql.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/sql.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sqlhandler/utils/__init__.py" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/sqlhandler/utils/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/config.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/sqlhandler/utils/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/custom/executable.py" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="FileTemplateManagerImpl">
+    <option name="RECENT_TEMPLATES">
+      <list>
+        <option value="Python Script" />
+      </list>
+    </option>
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProjectId" id="1sGhJBa0PRoTCDrdji9NACMcqGn" />
+  <component name="ProjectLevelVcsManager" settingsEditedManually="true">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="autoscrollToSource" value="true" />
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showExcludedFiles" value="false" />
+    <option name="showLibraryContents" value="true" />
+    <option name="showMembers" value="true" />
+  </component>
   <component name="PropertiesComponent">
-    <property name="last_opened_file_path" value="$USER_HOME$/Python/repos" />
+    <property name="RunOnceActivity.OpenProjectViewOnStart" value="true" />
+    <property name="RunOnceActivity.ShowReadmeOnStart" value="true" />
+    <property name="WebServerToolWindowFactoryState" value="false" />
+    <property name="last_opened_file_path" value="$PROJECT_DIR$/sqlhandler/utils" />
+    <property name="node.js.detected.package.eslint" value="true" />
+    <property name="node.js.detected.package.tslint" value="true" />
+    <property name="node.js.selected.package.eslint" value="(autodetect)" />
+    <property name="node.js.selected.package.tslint" value="(autodetect)" />
+  </component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="C:\Users\matthewgdv\Documents\python\repos\sqlhandler\sqlhandler\utils" />
+      <recent name="C:\Users\matthewgdv\Documents\python\repos\sqlhandler\sqlhandler\custom" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="C:\Users\matthewgdv\Documents\python\repos\sqlhandler\sqlhandler\custom" />
+      <recent name="C:\Users\matthewgdv\Documents\python\repos\sqlhandler\sqlhandler" />
+    </key>
+  </component>
+  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="fc0532ac-426c-498f-9c5c-0b20727b7b5a" name="Default Changelist" comment="" />
+      <created>1620504762553</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1620504762553</updated>
+      <workItem from="1620504766648" duration="338000" />
+      <workItem from="1620505990177" duration="26531000" />
+    </task>
+    <servers />
+  </component>
+  <component name="TypeScriptGeneratedFilesManager">
+    <option name="version" value="3" />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
   </component>
 </project>

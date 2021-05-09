@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Set, Dict, Union
+from typing import TYPE_CHECKING, Union
 
 from miscutils import ReprMixin
 
@@ -25,7 +25,7 @@ class DatabaseShape(ReprMixin):
         for schema in self.schemas.values():
             schema.refresh()
 
-        self.all_objects: Set[ObjectName] = {obj for schema in self.schemas.values() for obj in schema.objects}
+        self.all_objects: set[ObjectName] = {obj for schema in self.schemas.values() for obj in schema.objects}
 
 
 class SchemaShape(ReprMixin):
@@ -33,6 +33,6 @@ class SchemaShape(ReprMixin):
         self.name, self.database, self.registry = name, database, {}
 
     def refresh(self) -> None:
-        self.tables: Set[TableName] = self.database.table_names(self.name)
-        self.views: Set[ViewName] = self.database.view_names(self.name)
-        self.objects: Set[ObjectName] = self.tables | self.views
+        self.tables: set[TableName] = self.database.table_names(self.name)
+        self.views: set[ViewName] = self.database.view_names(self.name)
+        self.objects: set[ObjectName] = self.tables | self.views

@@ -2,25 +2,31 @@ from __future__ import annotations
 
 import os
 
+from functools import cached_property
 from typing import Any, TYPE_CHECKING, Type, Union
 
 import pandas as pd
 
-import sqlalchemy as alch
+import sqlalchemy
 from sqlalchemy.engine.default import DefaultDialect
 from sqlalchemy.dialects import mssql
 
-from subtypes import Frame, DateTime
+from subtypes import DateTime
 from pathmagic import File
-from miscutils import cached_property
 from iotools.misc.serializer import LostObject
 
-from .custom import ModelMeta, Model, TemplatedModel, ReflectedModel, Query, Session, Relationship, SubtypesDateTime, SubtypesDate, BitLiteral, Select, Update, Insert, Delete
+from .custom import (
+    ModelMeta, Model, TemplatedModel, ReflectedModel,
+    Session, Relationship,
+    SubtypesDateTime, SubtypesDate, BitLiteral,
+    Select, Update, Insert, Delete,
+    StoredProcedure, Script,
+)
 from .database.schema import TableSchemas, ViewSchemas
-from .utils import StoredProcedure, Script
 from .database import Database, Metadata, Schemas, Schema
-from .utils import Config, Url
-from .enums import Dialect
+from .frame import Frame
+from .config import Config, Url
+from .enums import Enums
 
 if TYPE_CHECKING:
     from alembic.operations import Operations
@@ -37,26 +43,22 @@ class Sql:
     class Settings:
         cache_metadata = reflect_tables = reflect_views = True
         eager_reflection = False
-        cache_validity_days = None
-
-    class Enums:
-        Dialect, IfExists = Dialect, Frame.Enums.IfExists
 
     class Constructors:
         ModelMeta, Model, TemplatedModel, ReflectedModel = ModelMeta, Model, TemplatedModel, ReflectedModel
         Database, Metadata, Schemas, Schema = Database, Metadata, Schemas, Schema
-        Config, Query, Session = Config, Query, Session
+        Config, Session = Config, Session
         Select, Update, Insert, Delete = Select, Update, Insert, Delete
         StoredProcedure, Script = StoredProcedure, Script
         Config, Frame = Config, Frame
 
     class Declarative:
-        Column, ForeignKey, Index, CheckConstraint, Relationship = alch.Column, alch.ForeignKey, alch.Index, alch.CheckConstraint, Relationship
-        String, Integer, SmallInteger, BigInteger, Float, Decimal = alch.String, alch.Integer, alch.SmallInteger, alch.BigInteger, alch.Float, alch.Numeric
-        Boolean, Binary, Enum = alch.Boolean, alch.Binary, alch.Enum
+        Column, ForeignKey, Index, CheckConstraint, Relationship = sqlalchemy.Column, sqlalchemy.ForeignKey, sqlalchemy.Index, sqlalchemy.CheckConstraint, Relationship
+        String, Integer, SmallInteger, BigInteger, Float, Decimal = sqlalchemy.String, sqlalchemy.Integer, sqlalchemy.SmallInteger, sqlalchemy.BigInteger, sqlalchemy.Float, sqlalchemy.Numeric
+        Boolean, Enum = sqlalchemy.Boolean, sqlalchemy.Enum
         Datetime, Date = SubtypesDateTime, SubtypesDate
 
-    Url = Url
+    Url, Enums = Url, Enums
 
     def __init__(self, url: Union[Url, str], config: Config = None) -> None:
         self.settings = self.Settings()
@@ -65,29 +67,21 @@ class Sql:
         self.engine = self._create_engine(url=url)
         self.engine.connect()
 
-        self.session = self.Constructors.Session(bind=self.engine, query_cls=self.Constructors.Query)
+        self.session = self.Constructors.Session(bind=self.engine, future=True)
         self.database = self.Constructors.Database(self)
 
         self.StoredProcedure, self.Script = self.Constructors.StoredProcedure[self], self.Constructors.Script[self]
         self.Select, self.Update, self.Insert, self.Delete = self.Constructors.Select[self], self.Constructors.Update[self], self.Constructors.Insert[self], self.Constructors.Delete[self]
         self.transaction = Transaction(self)
 
-        self.AND, self.OR, self.CAST, self.CASE, self.TRUE, self.FALSE = alch.and_, alch.or_, alch.cast, alch.case, alch.true, alch.false
-        self.TEXT, self.LITERAL = alch.text, alch.literal
-
-        self.func, self.sqlalchemy = alch.func, alch
+        self.AND, self.OR, self.CAST, self.CASE, self.TRUE, self.FALSE = sqlalchemy.and_, sqlalchemy.or_, sqlalchemy.cast, sqlalchemy.case, sqlalchemy.true, sqlalchemy.false
+        self.func, self.text, self.literal = sqlalchemy.literal, sqlalchemy.text, sqlalchemy.literal
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(engine={repr(self.engine)}, database={repr(self.database)})"
 
     def __len__(self) -> int:
         return len(self.database.meta.tables)
-
-    def __enter__(self) -> Transaction:
-        return self.transaction.__enter__()
-
-    def __exit__(self, ex_type: Any, ex_value: Any, ex_traceback: Any) -> None:
-        self.transaction.__exit__(ex_type=ex_type, ex_value=ex_value, ex_traceback=ex_traceback)
 
     def __getstate__(self) -> dict:
         return {"engine": LostObject(self.engine), "database": LostObject(self.database)}
@@ -127,19 +121,6 @@ class Sql:
 
         return Operations(MigrationContext.configure(self.engine.connect()))
 
-    def query(self, *entities: Any) -> Query:
-        return self.session.query(*entities)
-
-    def query_to_frame(self, query: Query, labels: bool = False) -> Frame:
-        """Convert sqlalchemy.orm.Query object to a pandas DataFrame. Optionally apply table labels to columns and/or print an ascii representation of the DataFrame."""
-        query = query.with_labels() if labels else query
-
-        result = self.session.execute(query.statement)
-        cols = [col[0] for col in result.cursor.description]
-        frame = self.Constructors.Frame(result.fetchall(), columns=cols)
-
-        return frame
-
     def plaintext_query_to_frame(self, query: str) -> Frame:
         """Convert plaintext SQL to a pandas DataFrame. The SQL statement must be a SELECT that returns rows."""
         return self.Constructors.Frame(pd.read_sql_query(query, self.engine))
@@ -173,7 +154,7 @@ class Sql:
 
         dtypes = self._sql_dtype_dict_from_frame(dataframe)
         if has_identity_pk:
-            dtypes[primary_key] = alch.types.INT
+            dtypes[primary_key] = sqlalchemy.types.INT
 
         dataframe.to_sql(engine=self.engine, name=table, if_exists=if_exists, index=False, primary_key=primary_key, schema=schema, dtype=dtypes)
 
@@ -193,8 +174,9 @@ class Sql:
 
         return self.Constructors.Frame(vals, columns=cols)
 
-    def _create_engine(self, url: Union[Url, str]) -> alch.engine.base.Engine:
-        engine = alch.create_engine(str(url), echo=False, dialect=self._customize_dialect(url.get_dialect()())) if isinstance(url, Url) else alch.create_engine(str(url), echo=False)
+    def _create_engine(self, url: Union[Url, str]) -> sqlalchemy.engine.base.Engine:
+        dialect = self._customize_dialect(url.get_dialect()())
+        engine = sqlalchemy.create_engine(str(url), dialect=dialect, future=True) if isinstance(url, Url) else sqlalchemy.create_engine(str(url), future=True)
         engine.sql = self
 
         return engine
@@ -202,16 +184,16 @@ class Sql:
     def _customize_dialect(self, dialect: DefaultDialect) -> DefaultDialect:
         dialect.colspecs.update(
             {
-                alch.types.DateTime: SubtypesDateTime,
-                alch.types.DATETIME: SubtypesDateTime,
-                alch.types.Date: SubtypesDate,
-                alch.types.DATE: SubtypesDate,
+                sqlalchemy.types.DateTime: SubtypesDateTime,
+                sqlalchemy.types.DATETIME: SubtypesDateTime,
+                sqlalchemy.types.Date: SubtypesDate,
+                sqlalchemy.types.DATE: SubtypesDate,
             }
         )
 
         if isinstance(dialect, mssql.dialect):
             dialect.supports_multivalues_insert = True
-            dialect.colspecs.update({alch.dialects.mssql.BIT: BitLiteral})
+            dialect.colspecs.update({sqlalchemy.dialects.mssql.BIT: BitLiteral})
 
         return dialect
 
@@ -223,20 +205,20 @@ class Sql:
     def _sqlalchemy_dtype_from_series(series: pd.code.series.Series) -> Any:
         if series.dtype.name in ["int64", "Int64"]:
             if series.isnull().all():
-                return alch.types.Integer
+                return sqlalchemy.types.Integer
             else:
                 minimum, maximum = series.min(), series.max()
 
                 if 0 <= minimum and maximum <= 255:
-                    return alch.dialects.mssql.TINYINT
+                    return sqlalchemy.dialects.mssql.TINYINT
                 elif -2**15 <= minimum and maximum <= 2**15:
-                    return alch.types.SmallInteger
+                    return sqlalchemy.types.SmallInteger
                 elif -2**31 <= minimum and maximum <= 2**31:
-                    return alch.types.Integer
+                    return sqlalchemy.types.Integer
                 else:
-                    return alch.types.BigInteger
+                    return sqlalchemy.types.BigInteger
         elif series.dtype.name == "object":
-            return alch.types.String(int((series.fillna("").astype(str).str.len().max()//50 + 1)*50))
+            return sqlalchemy.types.String(int((series.fillna("").astype(str).str.len().max()//50 + 1)*50))
         else:
             raise TypeError(f"Don't know how to process column type '{series.dtype}' of '{series.name}'.")
 
@@ -259,7 +241,7 @@ class Transaction:
         return f"{type(self).__name__}(state={repr(self.state)}, start={repr(self.start)})"
 
     def __enter__(self) -> Transaction:
-        self.sql.session.rollback()
+        self.sql.session.begin()
         self.now = DateTime.now()
         return self
 

@@ -8,3 +8,5 @@ pymiscutils
 pysubtypes
 sqlalchemy
 sqlparse
+pytest
+tabulate

@@ -1,17 +1,18 @@
 from __future__ import annotations
 
+from functools import cached_property
+import pathlib
 import warnings
 from contextlib import contextmanager
 from typing import Any, Union, Set, Callable, TYPE_CHECKING, cast, Type
 
 import sqlalchemy as alch
 from sqlalchemy import Column, Integer, event
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.ext.automap import automap_base
-from sqlalchemy.ext.declarative import declarative_base
 
 from maybe import Maybe
 from subtypes import Str, Dict
-from miscutils import cached_property, PercentagePrinter
 from iotools import Cache
 
 from .meta import NullRegistry, Metadata
@@ -30,7 +31,13 @@ class Database:
     _null_registry = NullRegistry()
 
     def __init__(self, sql: Sql) -> None:
-        self.sql, self.name, self.cache, self._post_reshape_countdown = sql, sql.engine.url.database, Cache(file=sql.config.folder.new_file("sql_cache", "pkl"), days=5), 0
+        self.sql, self._post_reshape_countdown = sql, 0
+
+        self.name = "main" if (name := sql.engine.url.database) is None else (
+            path.stem if (path := pathlib.Path(name)).is_file() else name
+        )
+
+        self.cache = Cache(file=sql.config.dir.new_dir("cache").new_file(self.name, "pkl"))
         self.meta = self._get_metadata()
 
         self.model = cast(Type[Model], declarative_base(metadata=self.meta, name=self.sql.Constructors.Model.__name__,
@@ -102,15 +109,13 @@ class Database:
 
     def _get_metadata(self) -> Metadata:
         if not self.sql.settings.cache_metadata:
-            return self.sql.Constructors.Metadata(sql=self.sql, bind=self.sql.engine)
+            return self.sql.Constructors.Metadata[self.sql]()
 
         try:
-            meta = self.cache.setdefault(self.name, self.sql.Constructors.Metadata())
+            meta = self.cache.setdefault(self.name, self.sql.Constructors.Metadata()).parametrize(self.sql)
         except Exception as ex:
             warnings.warn(f"The following exception ocurred when attempting to retrieve the previously cached Metadata, but was supressed:\n\n{ex}\n\nStarting with blank Metadata...")
-            meta = self.sql.Constructors.Metadata()
-
-        meta.bind, meta.sql = self.sql.engine, self.sql
+            meta = self.sql.Constructors.Metadata[self.sql]()
 
         return meta
 
@@ -140,9 +145,8 @@ class Database:
 
     def _reflect_database(self):
         with self._post_reshape_soon():
-            for schema in PercentagePrinter(sorted(self.shape.schemas, key=lambda name: name.name), formatter=lambda name: f"Reflecting schema: {name.name}"):
+            for schema in sorted(self.shape.schemas, key=lambda name: name.name):
                 if schema.name not in self.sql.settings.lazy_schemas:
-                    # with Printer.from_indentation():
                     self._reflect_schema(schema=schema)
 
     def _reflect_schema(self, schema: SchemaName):
@@ -153,14 +157,15 @@ class Database:
                 for collection, condition in [(schema_shape.tables, self.sql.settings.reflect_tables), (schema_shape.views, self.sql.settings.reflect_views)]
             ], [])
 
-            for name in PercentagePrinter(names, formatter=lambda name_: f"Reflecting {name_.object_type}: {name_.name}"):
+            for name in names:
                 self._reflect_object(name=name)
 
     # noinspection PyArgumentList
     def _reflect_object(self, name: ObjectName) -> Table:
         with self._post_reshape_soon():
-            if not (table := Table(name.stem, self.meta, schema=name.schema.name, autoload=True)).primary_key:
-                table = Table(name.stem, self.meta, Column("__pk__", Integer, primary_key=True), schema=name.schema.name, autoload=True, extend_existing=True)
+            if not (table := Table(name.stem, self.meta, schema=name.schema.name, autoload_with=self.sql.engine)).primary_key:
+                table = Table(name.stem, self.meta, Column("__pk__", Integer, primary_key=True), extend_existing=True,
+                              schema=name.schema.name, autoload_with=self.sql.engine)
 
             return table
 

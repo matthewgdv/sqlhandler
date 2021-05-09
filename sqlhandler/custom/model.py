@@ -3,26 +3,22 @@ from __future__ import annotations
 from typing import Any, Union, TYPE_CHECKING, Type, cast
 
 import sqlalchemy as alch
-from sqlalchemy import Column, true, func
-from sqlalchemy import types, event
+from sqlalchemy import Column, true, func, types, event
 from sqlalchemy.sql.base import ImmutableColumnCollection
-from sqlalchemy.orm import backref
-from sqlalchemy.orm.attributes import InstrumentedAttribute
+from sqlalchemy.orm import declared_attr, DeclarativeMeta, Mapper, InstrumentedAttribute
 from sqlalchemy.orm.util import AliasedClass
-from sqlalchemy.orm.mapper import Mapper
-
-from sqlalchemy.ext.declarative import declared_attr, DeclarativeMeta
 
 from subtypes import Str
 
 from .field import SubtypesDateTime
 from .misc import absolute_namespace, CreateTableAccessor
 from .relationship import Relationship
-from .query import Query
 from .table import Table
+from .utils import valid_instrumented_attributes, valid_columns
 
 if TYPE_CHECKING:
     from sqlhandler.database import Metadata
+    from .expression import Select
 
 
 class ModelMeta(DeclarativeMeta):
@@ -58,9 +54,9 @@ class ModelMeta(DeclarativeMeta):
         return getattr(cls, item)
 
     @property
-    def query(cls: ModelMeta) -> Query:
+    def select(cls: ModelMeta) -> Select:
         """Create a new Query operating on this class."""
-        return cls.metadata.sql.session.query(cls)
+        return cls.metadata.sql.Select(cls)
 
     @property
     def create(cls: ModelMeta) -> CreateTableAccessor:
@@ -72,9 +68,15 @@ class ModelMeta(DeclarativeMeta):
         """Access the columns (or a specific column if 'colname' is specified) of the underlying table."""
         return cls.__table__.c
 
+    def get(cls, pk: Any) -> ModelMeta:
+        return cls.metadata.sql.session.get(cls, pk)
+
     def alias(cls: ModelMeta, name: str, **kwargs: Any) -> AliasedClass:
         """Create a new class that is an alias of this one, with the given name."""
-        return alch.orm.aliased(cls, name=name, **kwargs)
+        for col in (alias := alch.orm.aliased(cls, name=name, **kwargs)).c:
+            setattr(alias, col.name, col)
+
+        return alias
 
     def drop(cls: ModelMeta) -> None:
         """Drop the table mapped to this class."""
@@ -84,14 +86,14 @@ class ModelMeta(DeclarativeMeta):
 class BaseModel(metaclass=ModelMeta):
     """Custom base class for declarative and automap bases to inherit from. Represents a mapped table in a sql database."""
     __table__: Table
-    metadata: Metadata
     __mapper__: Mapper
+    metadata: Metadata
 
     def __init__(self, *args, **kwargs):
         pass
 
     def __repr__(self) -> str:
-        return f"{type(self).__name__}({', '.join([f'{col.name}={repr(getattr(self, col.name))}' for col in type(self).__table__.columns])})"
+        return f"{type(self).__name__}({', '.join([f'{col.name}={repr(getattr(self, col.name))}' for col in valid_columns(self.__table__)])})"
 
     def insert(self) -> BaseModel:
         """Emit an insert statement for this object against this model's underlying table."""
@@ -100,7 +102,7 @@ class BaseModel(metaclass=ModelMeta):
 
     def update(self, argdeltas: dict[Union[str, InstrumentedAttribute], Any] = None, /, **update_kwargs: Any) -> BaseModel:
         """
-        Emit an update statement against database record represented by this object in this model's underlying table.
+        Emit an update statement against the database record represented by this object in this model's underlying table.
         This method positionally accepts a dict where the keys are the model's class attributes (of type InstrumentedAttribute) and the values are the values to update to.
         Alternatively, if the column names are known they may be set using keyword arguments. Raises AttributeError if invalid keys are provided.
         """
@@ -110,7 +112,7 @@ class BaseModel(metaclass=ModelMeta):
         updates.update(clean_argdeltas)
         updates.update(update_kwargs)
 
-        if difference := (set(updates) - set([attr.key for attr in self.__mapper__.all_orm_descriptors])):
+        if difference := (set(updates) - set([attr.key for attr in valid_instrumented_attributes(type(self))])):
             raise AttributeError(f"""Cannot perform update, '{type(self).__name__}' object has no attribute(s): {", ".join([f"'{unknown}'" for unknown in difference])}.""")
 
         if clean_argdeltas and update_kwargs:
@@ -130,7 +132,7 @@ class BaseModel(metaclass=ModelMeta):
     # noinspection PyArgumentList
     def clone(self, argdeltas: dict[Union[str, InstrumentedAttribute], Any] = None, /, **update_kwargs: Any) -> BaseModel:
         """Create a clone (new primary_key, but copies of all other attributes) of this object in the detached state. Model.insert() will be required to persist it to the database."""
-        valid_cols = [col.name for col in self.__table__.columns if col.name not in self.__table__.primary_key.columns]
+        valid_cols = [col.name for col in valid_columns(self.__table__) if col.name not in self.__table__.primary_key.columns]
         return type(self)(**{col: getattr(self, col) for col in valid_cols}).update(argdeltas, **update_kwargs)
 
 

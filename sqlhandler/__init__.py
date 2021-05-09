@@ -1,4 +1,5 @@
-__all__ = ["Sql", "Config"]
+__all__ = ["Sql", "Config", "Frame"]
 
 from .sql import Sql
-from sqlhandler.utils.config import Config
+from .frame import Frame
+from sqlhandler.config import Config

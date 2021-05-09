@@ -4,20 +4,31 @@ from maybe import Maybe
 import iotools
 
 import sqlhandler
-from sqlhandler.enums import Dialect
+from sqlhandler.enums import Enums
 
 from sqlalchemy.engine.url import URL
+
+
+DRIVERNAMES_BY_DIALECT = {
+    Enums.Dialect.MS_SQL: "mssql",
+    Enums.Dialect.MY_SQL: "mysql",
+    Enums.Dialect.SQLITE: "sqlite",
+    Enums.Dialect.POSTGRESQL: "postgresql+psycopg2",
+    Enums.Dialect.ORACLE: "oracle",
+}
 
 
 class Url(URL):
     """Class representing a sql connection URL."""
 
-    def __init__(self, drivername: Dialect = None, database: str = None,
-                 username: str = None, password: str = None,
-                 host: str = None, port: int = None, query: dict = None) -> None:
-        super().__init__(drivername=str(drivername), database=str(database),
-                         username=Maybe(username).else_(""), password=password,
-                         host=host, port=port, query=query)
+    @classmethod
+    def create(cls, dialect: Enums.Dialect = None, database: str = None,
+               username: str = None, password: str = None,
+               host: str = None, port: int = None, query: dict = None) -> Url:
+
+        return super().create(drivername=Enums.Dialect[dialect].map_to(DRIVERNAMES_BY_DIALECT), database=str(database),
+                              username=Maybe(username).else_(""), password=password,
+                              host=host, port=port, query=query)
 
 
 class Config(iotools.Config):
@@ -25,23 +36,15 @@ class Config(iotools.Config):
     name = sqlhandler.__name__
     default = {
         "default_connection": "memory", "connections": {
-            "memory": {"drivername": "sqlite", "default_database": None, "username": None, "password": None, "host": "", "port": None, "query": None}
+            "memory": {"dialect": str(Enums.Dialect.SQLITE), "default_database": None, "username": None, "password": None, "host": "", "port": None, "query": None}
         }
     }
 
-    def add_connection(self, connection: str, dialect: Dialect, default_database: str,
+    def add_connection(self, connection: str, dialect: Enums.Dialect, default_database: str,
                        username: str = None, password: str = None,
                        host: str = None, port: str = None, query: dict = None, is_default: bool = False) -> None:
         """Add a new connection with the given arguments."""
-        driver_name = Dialect[dialect].map_to({
-            Dialect.MS_SQL: "mssql",
-            Dialect.MY_SQL: "mysql",
-            Dialect.SQLITE: "sqlite",
-            Dialect.POSTGRESQL: "postgresql+psycopg2",
-            Dialect.ORACLE: "oracle",
-        })
-
-        self.data.connections[connection] = dict(drivername=driver_name, default_database=default_database,
+        self.data.connections[connection] = dict(dialect=str(dialect), default_database=default_database,
                                                  username=username, password=password,
                                                  host=host, port=port, query=query)
         if is_default:
@@ -49,7 +52,7 @@ class Config(iotools.Config):
 
     def add_mssql_connection_with_integrated_security(self, connection: str, default_database: str, host: str, is_default: bool = False):
         """Add a SQL server connection that will use Windows integrated security."""
-        self.add_connection(connection=connection, dialect=Dialect.MS_SQL, default_database=default_database,
+        self.add_connection(connection=connection, dialect=Enums.Dialect.MS_SQL, default_database=default_database,
                             host=host, query={"driver": "SQL+Server"}, is_default=is_default)
 
     def set_default_connection(self, connection: str) -> None:
@@ -64,7 +67,8 @@ class Config(iotools.Config):
         if connection is None or connection in self.data.connections:
             settings = self.data.connections[Maybe(connection).else_(self.data.default_connection)]
             database = Maybe(database).else_(settings.default_database)
-            return Url(drivername=settings.drivername, database=database,
+
+            return Url(dialect=settings.drivername, database=database,
                        username=settings.username, password=settings.password,
                        host=settings.host, port=settings.port, query=Maybe(settings.query).else_(None))
         else:
