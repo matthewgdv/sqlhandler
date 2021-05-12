@@ -1,30 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ChangeListManager">
-    <list default="true" id="fc0532ac-426c-498f-9c5c-0b20727b7b5a" name="Default Changelist" comment="">
-      <change afterPath="$PROJECT_DIR$/sqlhandler/custom/result.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/sqlhandler/custom/session.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/sqlhandler/custom/utils.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/sqlhandler/frame/__init__.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/sqlhandler/frame/frame.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/sqlhandler.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/sqlhandler.iml" afterDir="false" />
+    <list default="true" id="fc0532ac-426c-498f-9c5c-0b20727b7b5a" name="Default Changelist" comment="Do first refactor pass for sqlalchemy 2.0">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/requirements.txt" beforeDir="false" afterPath="$PROJECT_DIR$/requirements.txt" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sqlhandler/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sqlhandler/custom/__init__.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/custom/__init__.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sqlhandler/custom/expression.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/custom/expression.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sqlhandler/custom/model.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/custom/model.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sqlhandler/custom/query.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/custom/query.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sqlhandler/custom/relationship.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/custom/relationship.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sqlhandler/custom/table.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/custom/table.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sqlhandler/database/database.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/database/database.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sqlhandler/database/meta.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/database/meta.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sqlhandler/database/shape.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/database/shape.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sqlhandler/enums.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/enums.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sqlhandler/sql.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/sql.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sqlhandler/utils/__init__.py" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/sqlhandler/utils/config.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/config.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/sqlhandler/utils/utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/sqlhandler/custom/executable.py" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -81,8 +59,16 @@
       <option name="presentableId" value="Default" />
       <updated>1620504762553</updated>
       <workItem from="1620504766648" duration="338000" />
-      <workItem from="1620505990177" duration="26531000" />
+      <workItem from="1620505990177" duration="27821000" />
     </task>
+    <task id="LOCAL-00001" summary="Do first refactor pass for sqlalchemy 2.0">
+      <created>1620584163643</created>
+      <option name="number" value="00001" />
+      <option name="presentableId" value="LOCAL-00001" />
+      <option name="project" value="LOCAL" />
+      <updated>1620584163643</updated>
+    </task>
+    <option name="localTasksCounter" value="2" />
     <servers />
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -98,5 +84,9 @@
         </entry>
       </map>
     </option>
+  </component>
+  <component name="VcsManagerConfiguration">
+    <MESSAGE value="Do first refactor pass for sqlalchemy 2.0" />
+    <option name="LAST_COMMIT_MESSAGE" value="Do first refactor pass for sqlalchemy 2.0" />
   </component>
 </project>
