@@ -3,12 +3,13 @@ from __future__ import annotations
 import os
 
 from functools import cached_property
-from typing import Any, TYPE_CHECKING, Type, Union
+from typing import Any, TYPE_CHECKING, Type
 
 import pandas as pd
 
 import sqlalchemy
 from sqlalchemy.engine.default import DefaultDialect
+from sqlalchemy.engine import Engine
 from sqlalchemy.dialects import mssql
 
 from subtypes import DateTime
@@ -60,7 +61,7 @@ class Sql:
 
     Url, Enums = Url, Enums
 
-    def __init__(self, url: Union[Url, str], config: Config = None) -> None:
+    def __init__(self, url: Url, config: Config = None) -> None:
         self.settings = self.Settings()
         self.config = self.Constructors.Config() if config is None else config
 
@@ -75,7 +76,7 @@ class Sql:
         self.transaction = Transaction(self)
 
         self.AND, self.OR, self.CAST, self.CASE, self.TRUE, self.FALSE = sqlalchemy.and_, sqlalchemy.or_, sqlalchemy.cast, sqlalchemy.case, sqlalchemy.true, sqlalchemy.false
-        self.func, self.text, self.literal = sqlalchemy.literal, sqlalchemy.text, sqlalchemy.literal
+        self.func, self.text, self.literal = sqlalchemy.func, sqlalchemy.text, sqlalchemy.literal
 
     def __repr__(self) -> str:
         return f"{type(self).__name__}(engine={repr(self.engine)}, database={repr(self.database)})"
@@ -156,7 +157,8 @@ class Sql:
         if has_identity_pk:
             dtypes[primary_key] = sqlalchemy.types.INT
 
-        dataframe.to_sql(engine=self.engine, name=table, if_exists=if_exists, index=False, primary_key=primary_key, schema=schema, dtype=dtypes)
+        dataframe.to_sql(engine=self.engine, name=table, if_exists=if_exists,
+                         index=False, primary_key=primary_key, schema=schema, dtype=dtypes)
 
         self.database._sync_with_db()
         return self.tables[schema][table]()
@@ -174,9 +176,9 @@ class Sql:
 
         return self.Constructors.Frame(vals, columns=cols)
 
-    def _create_engine(self, url: Union[Url, str]) -> sqlalchemy.engine.base.Engine:
+    def _create_engine(self, url: Url) -> Engine:
         dialect = self._customize_dialect(url.get_dialect()())
-        engine = sqlalchemy.create_engine(str(url), dialect=dialect, future=True) if isinstance(url, Url) else sqlalchemy.create_engine(str(url), future=True)
+        engine = sqlalchemy.create_engine(str(url), dialect=dialect, future=True)
         engine.sql = self
 
         return engine
@@ -199,7 +201,10 @@ class Sql:
 
     @staticmethod
     def _sql_dtype_dict_from_frame(frame: Frame) -> dict[str, Any]:
-        return {name: Sql._sqlalchemy_dtype_from_series(col) for name, col in frame.infer_objects().iteritems() if col.dtype.name in ["int64", "Int64", "object"]}
+        return {
+            name: Sql._sqlalchemy_dtype_from_series(col)
+            for name, col in frame.infer_objects().iteritems() if col.dtype.name in ["int64", "Int64", "object"]
+        }
 
     @staticmethod
     def _sqlalchemy_dtype_from_series(series: pd.code.series.Series) -> Any:
@@ -230,7 +235,7 @@ class Sql:
 
     @classmethod
     def from_memory(cls) -> Sql:
-        return cls("sqlite://")
+        return cls(cls.Url.create(dialect=cls.Enums.Dialect.SQLITE))
 
 
 class Transaction:
@@ -241,6 +246,7 @@ class Transaction:
         return f"{type(self).__name__}(state={repr(self.state)}, start={repr(self.start)})"
 
     def __enter__(self) -> Transaction:
+        self.sql.session.rollback()
         self.sql.session.begin()
         self.now = DateTime.now()
         return self

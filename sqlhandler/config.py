@@ -26,8 +26,8 @@ class Url(URL):
                username: str = None, password: str = None,
                host: str = None, port: int = None, query: dict = None) -> Url:
 
-        return super().create(drivername=Enums.Dialect[dialect].map_to(DRIVERNAMES_BY_DIALECT), database=str(database),
-                              username=Maybe(username).else_(""), password=password,
+        return super().create(drivername=Enums.Dialect[dialect].map_to(DRIVERNAMES_BY_DIALECT), database=database,
+                              username=username, password=password,
                               host=host, port=port, query=query)
 
 

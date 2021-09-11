@@ -5,13 +5,13 @@ from typing import Any, TYPE_CHECKING
 import sqlalchemy as alch
 from sqlalchemy.orm import InstrumentedAttribute
 
-from maybe import Maybe
 from miscutils import ParametrizableMixin
+import sqlparse
 
 from sqlhandler.frame import Frame
 
 from .result import Result
-from .utils import literal_statement, clean_entities
+from .utils import clean_entities
 
 if TYPE_CHECKING:
     from sqlhandler import Sql
@@ -19,16 +19,29 @@ if TYPE_CHECKING:
 
 class ExpressionMixin(ParametrizableMixin):
     """A mixin providing private methods for logging using expression classes."""
+    sql: Sql
 
     def __repr__(self) -> str:
         return str(self)
 
     def __str__(self) -> str:
-        return literal_statement(self)
+        return self.literal_statement()
+
+    def literal_statement(self: Any, format_statement: bool = True) -> str:
+        """Returns this a query or expression object's statement as raw SQL with inline literal binds."""
+
+        bound = self.compile(self.sql.engine, compile_kwargs=dict(literal_binds=True)).string + ";"
+        formatted = sqlparse.format(bound, reindent_aligned=True, keyword_case="upper") if format_statement else bound
+
+        # stage1 = Str(formatted).re.sub(r"\bOVER\s*\(\s*", lambda m: "OVER (").re.sub(r"OVER \((ORDER\s*BY|PARTITION\s*BY)\s+(\S+)\s+(ORDER\s*BY|PARTITION\s*BY)\s+(\S+)\s*\)", lambda m: f"OVER ({m.group(1)} {m.group(2)} {m.group(3)} {m.group(4)})")
+        # stage2 = stage1.re.sub(r"(?<=\n)([^\n]*JOIN[^\n]*)(\bON\b[^\n;]*)(?=[\n;])", lambda m: f"  {m.group(1).strip()}\n    {m.group(2).strip()}")
+        # stage3 = stage2.re.sub(r"(?<=\bJOIN[^\n]+\n\s+ON[^\n]+\n(?:\s*AND[^\n]+\n)*?)(\s*AND[^\n]+)(?=[\n;])", lambda m: f"    {m.group(1).strip()}")
+
+        return formatted
 
     def execute(self) -> Result:
         """Execute this query's statement in the current session."""
-        return self.sql.session.execute(self)
+        return self.sql.session.execute(self, sql=self.sql)
 
     def parametrize(self, param: Sql) -> ExpressionMixin:
         self.sql = param
@@ -71,9 +84,22 @@ class Insert(ExpressionMixin, alch.sql.Insert):
     def values(self, *args: Any, **kwargs: Any) -> Insert:
         """Insert the given values as either a single dict, or a list of dicts."""
         ret = super().values(*args, **kwargs)
-        if isinstance(ret.parameters, list):
-            ret.parameters = [{(col.key if isinstance(col, InstrumentedAttribute) else col): (Maybe(val).else_(alch.null()))
-                               for col, val in record.items()} for record in ret.parameters]
+
+        try:
+            multi_values, = ret._multi_values
+        except AttributeError:
+            pass
+        else:
+            new_multi_values = [
+                {
+                    col.key if isinstance(col, InstrumentedAttribute) else col: val if val is not None else alch.null()
+                    for col, val in record.items()
+                }
+                for record in multi_values
+            ]
+
+            ret._multi_values = (new_multi_values,)
+
         return ret
 
 
