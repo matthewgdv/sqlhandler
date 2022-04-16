@@ -19,7 +19,7 @@ from pathmagic import File, Dir
 from sqlhandler.enums import Enums
 
 
-pd.set_option("max_columns", None)
+pd.set_option("styler.render.max_columns", None)
 
 PathLike = Union[str, os.PathLike, pathlib.Path]
 FuncSig = TypeVar("FuncSig", bound=Callable)
